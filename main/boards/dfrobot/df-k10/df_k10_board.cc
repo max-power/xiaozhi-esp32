@@ -3,6 +3,7 @@
 #include "display/lcd_display.h"
 #include "esp_lcd_ili9341.h"
 #include "led_control.h"
+#include "sd_control.h"
 #include "application.h"
 #include "button.h"
 #include "config.h"
@@ -16,6 +17,9 @@
 #include <esp_lcd_panel_vendor.h>
 #include <driver/i2c_master.h>
 #include <driver/spi_common.h>
+#include <esp_vfs_fat.h>
+#include <sdmmc_cmd.h>
+#include <driver/sdspi_host.h>
 
 #include "esp_io_expander_tca95xx_16bit.h"
 
@@ -34,6 +38,8 @@ private:
     button_driver_t* btn_b_driver_ = nullptr;
 
     CircularStrip* led_strip_;
+
+    bool sd_mounted_ = false;
 
     static Df_K10Board* instance_;
 
@@ -55,6 +61,7 @@ private:
     }
 
     void InitializeSpi() {
+        // SPI3 — LCD only (ILI9341, write-only, no MISO needed).
         spi_bus_config_t buscfg = {};
         buscfg.mosi_io_num = GPIO_NUM_21;
         buscfg.miso_io_num = GPIO_NUM_NC;
@@ -63,6 +70,43 @@ private:
         buscfg.quadhd_io_num = GPIO_NUM_NC;
         buscfg.max_transfer_sz = DISPLAY_WIDTH * DISPLAY_HEIGHT * sizeof(uint16_t);
         ESP_ERROR_CHECK(spi_bus_initialize(SPI3_HOST, &buscfg, SPI_DMA_CH_AUTO));
+
+        // SPI2 — SD card.
+        spi_bus_config_t sd_buscfg = {};
+        sd_buscfg.mosi_io_num = SD_SPI_MOSI_PIN;
+        sd_buscfg.miso_io_num = SD_SPI_MISO_PIN;
+        sd_buscfg.sclk_io_num = SD_SPI_SCK_PIN;
+        sd_buscfg.quadwp_io_num = GPIO_NUM_NC;
+        sd_buscfg.quadhd_io_num = GPIO_NUM_NC;
+        sd_buscfg.max_transfer_sz = 4096;
+        ESP_ERROR_CHECK(spi_bus_initialize(SPI2_HOST, &sd_buscfg, SPI_DMA_CH_AUTO));
+    }
+
+    void InitializeSdCard() {
+        const esp_vfs_fat_sdmmc_mount_config_t mount_cfg = {
+            .format_if_mount_failed = false,
+            .max_files              = 5,
+            .allocation_unit_size   = 16 * 1024,
+        };
+
+        sdmmc_host_t host = SDSPI_HOST_DEFAULT();
+        host.slot         = SPI2_HOST;
+        host.max_freq_khz = 4000;
+
+        sdspi_device_config_t slot_cfg = SDSPI_DEVICE_CONFIG_DEFAULT();
+        slot_cfg.host_id = SPI2_HOST;
+        slot_cfg.gpio_cs = SD_SPI_CS_PIN;
+
+        sdmmc_card_t* card = nullptr;
+        esp_err_t ret = esp_vfs_fat_sdspi_mount("/sdcard", &host, &slot_cfg, &mount_cfg, &card);
+        if (ret == ESP_OK) {
+            sd_mounted_ = true;
+            ESP_LOGI(TAG, "SD: %s %.1f GB", card->cid.name,
+                     (double)((uint64_t)card->csd.capacity * card->csd.sector_size) / 1e9);
+        } else {
+            sd_mounted_ = false;
+            ESP_LOGW(TAG, "SD mount failed: %s", esp_err_to_name(ret));
+        }
     }
 
     esp_err_t IoExpanderSetLevel(uint16_t pin_mask, uint8_t level) {
@@ -256,6 +300,7 @@ private:
     void InitializeIot() {
         led_strip_ = new CircularStrip(BUILTIN_LED_GPIO, 3);
         new LedStripControl(led_strip_);
+        InitializeSdTool(sd_mounted_);
     }
 
 public:
@@ -263,6 +308,7 @@ public:
         InitializeI2c();
         InitializeIoExpander();
         InitializeSpi();
+        InitializeSdCard();
         InitializeIli9341Display();
         InitializeButtons();
         InitializeIot();
