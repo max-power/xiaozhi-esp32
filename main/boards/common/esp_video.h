@@ -2,6 +2,7 @@
 #include "sdkconfig.h"
 
 #include <lvgl.h>
+#include <functional>
 #include <memory>
 #include <thread>
 #include <vector>
@@ -17,6 +18,8 @@ struct JpegChunk {
     uint8_t* data;
     size_t len;
 };
+
+class Http;
 
 class EspVideo : public Camera {
 private:
@@ -43,6 +46,13 @@ private:
     std::string explain_token_;
     std::thread encoder_thread_;
 
+    // Shared multipart/form-data POST to explain_url_: writes the "question"
+    // field and the "file" field header, calls send_body to write the image
+    // bytes, then the multipart footer, and returns the server's response.
+    std::string PostExplainRequest(const std::string& question, const std::string& filename,
+                                    const std::string& content_type,
+                                    const std::function<void(Http*)>& send_body);
+
 public:
     EspVideo(const esp_video_init_config_t& config);
     ~EspVideo() override;
@@ -53,4 +63,6 @@ public:
     virtual bool SetHMirror(bool enabled) override;
     virtual bool SetVFlip(bool enabled) override;
     virtual std::string Explain(const std::string& question);
+    virtual std::string ExplainFile(FILE* file, size_t file_size, const std::string& content_type,
+                                     const std::string& question) override;
 };

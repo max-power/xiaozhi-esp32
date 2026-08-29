@@ -242,6 +242,162 @@ jpeg_hw_dec_failed:
 }
 #endif  // CONFIG_XIAOZHI_ENABLE_HARDWARE_JPEG_DECODER
 
+esp_err_t jpeg_to_image_scaled(const uint8_t* src, size_t src_len, uint16_t max_dimension, uint8_t** out,
+                               size_t* out_len, size_t* width, size_t* height, size_t* stride, bool* scaled) {
+    if (src == NULL || src_len == 0 || out == NULL || out_len == NULL || width == NULL || height == NULL ||
+        stride == NULL || scaled == NULL) {
+        ESP_LOGE(TAG, "Invalid parameters");
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    esp_err_t ret = ESP_OK;
+    jpeg_error_t jpeg_ret = JPEG_ERR_OK;
+    uint8_t* out_buf = NULL;
+    jpeg_dec_io_t jpeg_io = {0};
+    jpeg_dec_header_info_t out_info = {0};
+    jpeg_dec_handle_t jpeg_dec = NULL;
+
+    *out = NULL;
+    *out_len = 0;
+    *width = 0;
+    *height = 0;
+    *stride = 0;
+    *scaled = false;
+
+    // First pass: open with no scale, just to read the header and learn the
+    // source dimensions — we need those before we can pick a target scale.
+    jpeg_dec_config_t probe_config = DEFAULT_JPEG_DEC_CONFIG();
+    probe_config.output_type = JPEG_PIXEL_FORMAT_RGB565_LE;
+    jpeg_ret = jpeg_dec_open(&probe_config, &jpeg_dec);
+    if (jpeg_ret != JPEG_ERR_OK) {
+        ESP_LOGE(TAG, "Failed to open JPEG decoder");
+        return ESP_FAIL;
+    }
+    jpeg_io.inbuf = (uint8_t*)src;
+    jpeg_io.inbuf_len = (int)src_len;
+    jpeg_ret = jpeg_dec_parse_header(jpeg_dec, &jpeg_io, &out_info);
+    jpeg_dec_close(jpeg_dec);
+    jpeg_dec = NULL;
+    if (jpeg_ret != JPEG_ERR_OK) {
+        ESP_LOGE(TAG, "Failed to parse JPEG header");
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    uint16_t src_w = out_info.width;
+    uint16_t src_h = out_info.height;
+    uint16_t dst_w = src_w;
+    uint16_t dst_h = src_h;
+    uint16_t longer = src_w > src_h ? src_w : src_h;
+
+    if (max_dimension > 0 && longer > max_dimension) {
+        double ratio = (double)max_dimension / (double)longer;
+        dst_w = (uint16_t)(src_w * ratio);
+        dst_h = (uint16_t)(src_h * ratio);
+        // Decoder requires exact multiples of 8; round down, minimum 8.
+        dst_w = (dst_w / 8) * 8;
+        dst_h = (dst_h / 8) * 8;
+        if (dst_w < 8) dst_w = 8;
+        if (dst_h < 8) dst_h = 8;
+        // Decoder allows at most an 8:1 scale-down ratio per dimension.
+        uint16_t min_w = ((src_w + 7) / 8 + 7) / 8 * 8;
+        uint16_t min_h = ((src_h + 7) / 8 + 7) / 8 * 8;
+        if (dst_w < min_w) dst_w = min_w;
+        if (dst_h < min_h) dst_h = min_h;
+        *scaled = (dst_w != src_w || dst_h != src_h);
+    }
+
+    if (!*scaled) {
+        // Already within max_dimension — skip the decode entirely, the
+        // caller should send the original bytes unchanged instead.
+        *width = src_w;
+        *height = src_h;
+        return ESP_OK;
+    }
+
+    // Second pass: decode, with scale set since we decided we need it.
+    jpeg_dec_config_t config = DEFAULT_JPEG_DEC_CONFIG();
+    config.output_type = JPEG_PIXEL_FORMAT_RGB565_LE;
+    config.rotate = JPEG_ROTATE_0D;
+    if (*scaled) {
+        config.scale.width = dst_w;
+        config.scale.height = dst_h;
+    }
+
+    jpeg_ret = jpeg_dec_open(&config, &jpeg_dec);
+    if (jpeg_ret != JPEG_ERR_OK) {
+        ESP_LOGE(TAG, "Failed to open JPEG decoder");
+        return ESP_FAIL;
+    }
+
+    jpeg_io.inbuf = (uint8_t*)src;
+    jpeg_io.inbuf_len = (int)src_len;
+    jpeg_ret = jpeg_dec_parse_header(jpeg_dec, &jpeg_io, &out_info);
+    if (jpeg_ret != JPEG_ERR_OK) {
+        ESP_LOGE(TAG, "Failed to parse JPEG header");
+        ret = ESP_ERR_INVALID_ARG;
+        goto scaled_dec_failed;
+    }
+
+    // Ask the decoder for the actual required buffer size rather than
+    // trusting our own dst_w*dst_h*2 computation — if that guess is even
+    // slightly off (padding, internal rounding) jpeg_dec_process() would
+    // write past the end of an under-sized buffer and silently corrupt the
+    // heap, which can then crash unpredictably somewhere else entirely.
+    int output_len = 0;
+    jpeg_ret = jpeg_dec_get_outbuf_len(jpeg_dec, &output_len);
+    if (jpeg_ret != JPEG_ERR_OK || output_len <= 0) {
+        ESP_LOGE(TAG, "Failed to get JPEG output buffer size");
+        ret = ESP_FAIL;
+        goto scaled_dec_failed;
+    }
+    if ((size_t)output_len != (size_t)dst_w * dst_h * 2) {
+        ESP_LOGW(TAG, "Scaled JPEG outbuf_len (%d) != dst_w*dst_h*2 (%zu) — using decoder's value",
+                 output_len, (size_t)dst_w * dst_h * 2);
+    }
+
+    out_buf = jpeg_calloc_align((size_t)output_len, 16);
+    if (out_buf == NULL) {
+        ESP_LOGE(TAG, "Failed to allocate memory for JPEG output buffer");
+        ret = ESP_ERR_NO_MEM;
+        goto scaled_dec_failed;
+    }
+
+    jpeg_io.outbuf = out_buf;
+    jpeg_ret = jpeg_dec_process(jpeg_dec, &jpeg_io);
+    if (jpeg_ret != JPEG_ERR_OK) {
+        ESP_LOGE(TAG, "Failed to decode JPEG");
+        ret = ESP_FAIL;
+        goto scaled_dec_failed;
+    }
+
+    *out = out_buf;
+    out_buf = NULL;
+    *out_len = (size_t)output_len;
+    *width = dst_w;
+    *height = dst_h;
+    *stride = (size_t)dst_w * 2;
+    jpeg_dec_close(jpeg_dec);
+    jpeg_dec = NULL;
+    ESP_LOGD(TAG, "Scaled JPEG %dx%d -> %dx%d (scaled=%d)", src_w, src_h, dst_w, dst_h, *scaled);
+    return ret;
+
+scaled_dec_failed:
+    if (jpeg_dec) {
+        jpeg_dec_close(jpeg_dec);
+        jpeg_dec = NULL;
+    }
+    if (out_buf) {
+        jpeg_free_align(out_buf);
+        out_buf = NULL;
+    }
+    *out = NULL;
+    *out_len = 0;
+    *width = 0;
+    *height = 0;
+    *stride = 0;
+    return ret;
+}
+
 esp_err_t jpeg_to_image(const uint8_t* src, size_t src_len, uint8_t** out, size_t* out_len, size_t* width,
                         size_t* height, size_t* stride) {
 #ifdef CONFIG_XIAOZHI_ENABLE_CAMERA_DEBUG_MODE

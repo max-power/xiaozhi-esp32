@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include <errno.h>
 #include <esp_heap_caps.h>
+#include <algorithm>
 #include <cstdio>
 #include <cstring>
 
@@ -926,6 +927,68 @@ bool EspVideo::SetVFlip(bool enabled) {
  * @note 函数会等待之前的编码线程完成后再开始新的处理
  * @warning 如果摄像头缓冲区为空或网络连接失败，将返回错误信息
  */
+std::string EspVideo::PostExplainRequest(const std::string& question, const std::string& filename,
+                                          const std::string& content_type,
+                                          const std::function<void(Http*)>& send_body) {
+    auto network = Board::GetInstance().GetNetwork();
+    auto http = network->CreateHttp(3);
+    // 构造multipart/form-data请求体
+    std::string boundary = "----ESP32_CAMERA_BOUNDARY";
+
+    // 配置HTTP客户端，使用分块传输编码
+    http->SetHeader("Device-Id", SystemInfo::GetMacAddress().c_str());
+    http->SetHeader("Client-Id", Board::GetInstance().GetUuid().c_str());
+    if (!explain_token_.empty()) {
+        http->SetHeader("Authorization", "Bearer " + explain_token_);
+    }
+    http->SetHeader("Content-Type", "multipart/form-data; boundary=" + boundary);
+    http->SetHeader("Transfer-Encoding", "chunked");
+    if (!http->Open("POST", explain_url_)) {
+        ESP_LOGE(TAG, "Failed to connect to explain URL");
+        throw std::runtime_error("Failed to connect to explain URL");
+    }
+
+    {
+        // 第一块：question字段
+        std::string question_field;
+        question_field += "--" + boundary + "\r\n";
+        question_field += "Content-Disposition: form-data; name=\"question\"\r\n";
+        question_field += "\r\n";
+        question_field += question + "\r\n";
+        http->Write(question_field.c_str(), question_field.size());
+    }
+    {
+        // 第二块：文件字段头部
+        std::string file_header;
+        file_header += "--" + boundary + "\r\n";
+        file_header += "Content-Disposition: form-data; name=\"file\"; filename=\"" + filename + "\"\r\n";
+        file_header += "Content-Type: " + content_type + "\r\n";
+        file_header += "\r\n";
+        http->Write(file_header.c_str(), file_header.size());
+    }
+
+    // 第三块：图片数据，由调用方提供
+    send_body(http.get());
+
+    {
+        // 第四块：multipart尾部
+        std::string multipart_footer;
+        multipart_footer += "\r\n--" + boundary + "--\r\n";
+        http->Write(multipart_footer.c_str(), multipart_footer.size());
+    }
+    // 结束块
+    http->Write("", 0);
+
+    if (http->GetStatusCode() != 200) {
+        ESP_LOGE(TAG, "Failed to upload image, status code: %d", http->GetStatusCode());
+        throw std::runtime_error("Failed to upload image");
+    }
+
+    std::string result = http->ReadAll();
+    http->Close();
+    return result;
+}
+
 std::string EspVideo::Explain(const std::string& question) {
     if (explain_url_.empty()) {
         throw std::runtime_error("Image explain URL or token is not set");
@@ -970,101 +1033,163 @@ std::string EspVideo::Explain(const std::string& question) {
         }
     });
 
-    auto network = Board::GetInstance().GetNetwork();
-    auto http = network->CreateHttp(3);
-    // 构造multipart/form-data请求体
-    std::string boundary = "----ESP32_CAMERA_BOUNDARY";
-
-    // 配置HTTP客户端，使用分块传输编码
-    http->SetHeader("Device-Id", SystemInfo::GetMacAddress().c_str());
-    http->SetHeader("Client-Id", Board::GetInstance().GetUuid().c_str());
-    if (!explain_token_.empty()) {
-        http->SetHeader("Authorization", "Bearer " + explain_token_);
-    }
-    http->SetHeader("Content-Type", "multipart/form-data; boundary=" + boundary);
-    http->SetHeader("Transfer-Encoding", "chunked");
-    if (!http->Open("POST", explain_url_)) {
-        ESP_LOGE(TAG, "Failed to connect to explain URL");
-        // Clear the queue
-        encoder_thread_.join();
-        JpegChunk chunk;
-        while (xQueueReceive(jpeg_queue, &chunk, portMAX_DELAY) == pdPASS) {
-            if (chunk.data != nullptr) {
-                heap_caps_free(chunk.data);
-            } else {
-                break;
-            }
-        }
-        vQueueDelete(jpeg_queue);
-        throw std::runtime_error("Failed to connect to explain URL");
-    }
-
-    {
-        // 第一块：question字段
-        std::string question_field;
-        question_field += "--" + boundary + "\r\n";
-        question_field += "Content-Disposition: form-data; name=\"question\"\r\n";
-        question_field += "\r\n";
-        question_field += question + "\r\n";
-        http->Write(question_field.c_str(), question_field.size());
-    }
-    {
-        // 第二块：文件字段头部
-        std::string file_header;
-        file_header += "--" + boundary + "\r\n";
-        file_header += "Content-Disposition: form-data; name=\"file\"; filename=\"camera.jpg\"\r\n";
-        file_header += "Content-Type: image/jpeg\r\n";
-        file_header += "\r\n";
-        http->Write(file_header.c_str(), file_header.size());
-    }
-
-    // 第三块：JPEG数据
     size_t total_sent = 0;
-    bool saw_terminator = false;
-    while (true) {
-        JpegChunk chunk;
-        if (xQueueReceive(jpeg_queue, &chunk, portMAX_DELAY) != pdPASS) {
-            ESP_LOGE(TAG, "Failed to receive JPEG chunk");
-            break;
+    bool body_sent = false;  // becomes true once PostExplainRequest actually invokes send_body
+    std::string result;
+    try {
+        result = PostExplainRequest(question, "camera.jpg", "image/jpeg", [&](Http* http) {
+            body_sent = true;
+            // 第三块：JPEG数据
+            bool saw_terminator = false;
+            while (true) {
+                JpegChunk chunk;
+                if (xQueueReceive(jpeg_queue, &chunk, portMAX_DELAY) != pdPASS) {
+                    ESP_LOGE(TAG, "Failed to receive JPEG chunk");
+                    break;
+                }
+                if (chunk.data == nullptr) {
+                    saw_terminator = true;
+                    break;  // The last chunk
+                }
+                http->Write((const char*)chunk.data, chunk.len);
+                total_sent += chunk.len;
+                heap_caps_free(chunk.data);
+            }
+            // Wait for the encoder thread to finish
+            encoder_thread_.join();
+            // 清理队列
+            vQueueDelete(jpeg_queue);
+
+            if (!saw_terminator || total_sent == 0) {
+                ESP_LOGE(TAG, "JPEG encoder failed or produced empty output");
+                throw std::runtime_error("Failed to encode image to JPEG");
+            }
+        });
+    } catch (...) {
+        // If PostExplainRequest failed before invoking send_body (e.g. Open()
+        // failed), the encoder thread and queue are still alive — clean up.
+        // If send_body already ran, it already did this itself.
+        if (!body_sent) {
+            JpegChunk chunk;
+            while (xQueueReceive(jpeg_queue, &chunk, portMAX_DELAY) == pdPASS) {
+                if (chunk.data != nullptr) {
+                    heap_caps_free(chunk.data);
+                } else {
+                    break;
+                }
+            }
+            encoder_thread_.join();
+            vQueueDelete(jpeg_queue);
         }
-        if (chunk.data == nullptr) {
-            saw_terminator = true;
-            break;  // The last chunk
-        }
-        http->Write((const char*)chunk.data, chunk.len);
-        total_sent += chunk.len;
-        heap_caps_free(chunk.data);
+        throw;
     }
-    // Wait for the encoder thread to finish
-    encoder_thread_.join();
-    // 清理队列
-    vQueueDelete(jpeg_queue);
-
-    if (!saw_terminator || total_sent == 0) {
-        ESP_LOGE(TAG, "JPEG encoder failed or produced empty output");
-        throw std::runtime_error("Failed to encode image to JPEG");
-    }
-
-    {
-        // 第四块：multipart尾部
-        std::string multipart_footer;
-        multipart_footer += "\r\n--" + boundary + "--\r\n";
-        http->Write(multipart_footer.c_str(), multipart_footer.size());
-    }
-    // 结束块
-    http->Write("", 0);
-
-    if (http->GetStatusCode() != 200) {
-        ESP_LOGE(TAG, "Failed to upload photo, status code: %d", http->GetStatusCode());
-        throw std::runtime_error("Failed to upload photo");
-    }
-
-    std::string result = http->ReadAll();
-    http->Close();
 
     // Get remain task stack size
     size_t remain_stack_size = uxTaskGetStackHighWaterMark(nullptr);
     ESP_LOGI(TAG, "Explain image size=%d bytes, compressed size=%d, remain stack size=%d, question=%s\n%s",
              (int)frame_.len, (int)total_sent, (int)remain_stack_size, question.c_str(), result.c_str());
+    return result;
+}
+
+namespace {
+// Longer edge, in pixels, that a JPEG gets scaled down to (if larger) before
+// upload — most vision backends downscale internally anyway, so sending a
+// multi-megapixel photo mostly just wastes upload time.
+constexpr uint16_t kExplainMaxDimension = 1024;
+}  // namespace
+
+std::string EspVideo::ExplainFile(FILE* file, size_t file_size, const std::string& content_type,
+                                   const std::string& question) {
+    if (explain_url_.empty()) {
+        throw std::runtime_error("Image explain URL or token is not set");
+    }
+    if (file == nullptr || file_size == 0) {
+        throw std::runtime_error("Image data is empty");
+    }
+
+    if (content_type == "image/jpeg") {
+        // Read the whole (compressed) file into memory so we can peek its
+        // dimensions and, if it's large, decode+re-encode it smaller. This
+        // is safe memory-wise because it's the *compressed* size (a few MB
+        // at most) — decoding at full resolution is what would blow up
+        // memory for a large photo, which is why any resize below uses
+        // jpeg_to_image_scaled()'s scale-during-decode instead of decoding
+        // full-size and shrinking afterwards.
+        std::vector<uint8_t> file_buf(file_size);
+        size_t read = fread(file_buf.data(), 1, file_size, file);
+        if (read != file_size) {
+            throw std::runtime_error("Failed to read image file");
+        }
+
+        uint8_t* decoded = nullptr;
+        size_t decoded_len = 0, dec_w = 0, dec_h = 0, dec_stride = 0;
+        bool scaled = false;
+        esp_err_t err = jpeg_to_image_scaled(file_buf.data(), file_buf.size(), kExplainMaxDimension, &decoded,
+                                              &decoded_len, &dec_w, &dec_h, &dec_stride, &scaled);
+
+        if (err == ESP_OK && scaled && decoded != nullptr) {
+            std::string result;
+            try {
+                result = PostExplainRequest(question, "image.jpg", "image/jpeg", [&](Http* http) {
+                    bool ok = image_to_jpeg_cb(
+                        decoded, decoded_len, (uint16_t)dec_w, (uint16_t)dec_h, V4L2_PIX_FMT_RGB565, 80,
+                        [](void* arg, size_t index, const void* data, size_t len) -> size_t {
+                            auto http = static_cast<Http*>(arg);
+                            if (data != nullptr && len > 0) {
+                                http->Write((const char*)data, len);
+                            }
+                            return len;
+                        },
+                        http);
+                    if (!ok) {
+                        throw std::runtime_error("Failed to re-encode resized image");
+                    }
+                });
+            } catch (...) {
+                heap_caps_free(decoded);
+                throw;
+            }
+            heap_caps_free(decoded);
+            ESP_LOGI(TAG, "Explain image file resized %dx%d (original %d bytes), question=%s\n%s", (int)dec_w,
+                     (int)dec_h, (int)file_size, question.c_str(), result.c_str());
+            return result;
+        }
+        if (decoded != nullptr) {
+            heap_caps_free(decoded);
+        }
+
+        // Already small enough, or the decode/scale attempt failed for some
+        // reason — send the original bytes unchanged, same as before.
+        std::string result = PostExplainRequest(question, "image.jpg", "image/jpeg", [&](Http* http) {
+            http->Write((const char*)file_buf.data(), file_buf.size());
+        });
+        ESP_LOGI(TAG, "Explain image file size=%d, question=%s\n%s", (int)file_buf.size(), question.c_str(),
+                 result.c_str());
+        return result;
+    }
+
+    // Non-JPEG content types: no resize path, stream unchanged in small
+    // chunks so memory use stays constant regardless of file size.
+    std::string filename = "image";
+    if (content_type == "image/png") filename += ".png";
+    else if (content_type == "image/gif") filename += ".gif";
+    else if (content_type == "image/bmp") filename += ".bmp";
+    else if (content_type == "image/webp") filename += ".webp";
+
+    std::string result = PostExplainRequest(question, filename, content_type, [&](Http* http) {
+        constexpr size_t kChunkSize = 4096;
+        std::vector<uint8_t> buffer(kChunkSize);
+        size_t remaining = file_size;
+        while (remaining > 0) {
+            size_t to_read = std::min(remaining, kChunkSize);
+            size_t n = fread(buffer.data(), 1, to_read, file);
+            if (n == 0) break;  // short read / EOF, stop early
+            http->Write((const char*)buffer.data(), n);
+            remaining -= n;
+        }
+    });
+
+    ESP_LOGI(TAG, "Explain image file size=%d, question=%s\n%s",
+             (int)file_size, question.c_str(), result.c_str());
     return result;
 }

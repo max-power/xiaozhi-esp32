@@ -2,6 +2,7 @@
 #ifndef CONFIG_IDF_TARGET_ESP32
 
 #include <esp_err.h>
+#include <stdbool.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -54,6 +55,37 @@ extern "C" {
  */
 esp_err_t jpeg_to_image(const uint8_t* src, size_t src_len, uint8_t** out, size_t* out_len, size_t* width,
                         size_t* height, size_t* stride);
+
+/**
+ * @brief Decodes a JPEG image at a reduced resolution, using the software
+ *        decoder's built-in scale-during-decode support, so memory use is
+ *        bounded by the *scaled* output rather than the original resolution.
+ *
+ * If the image's longer edge is already <= max_dimension, decodes at full
+ * resolution (equivalent to jpeg_to_image()) and reports scaled=false.
+ *
+ * @param[in]  src            Pointer to the JPEG bitstream in memory
+ * @param[in]  src_len        Length of the JPEG bitstream in bytes
+ * @param[in]  max_dimension  Target size for the longer edge. The decoder
+ *                            requires exact multiples of 8 and a maximum
+ *                            8:1 scale-down ratio per dimension; the actual
+ *                            output size (rounded/clamped accordingly) is
+ *                            reported via *width and *height.
+ * @param[out] out            Decoded RGB565 (little-endian) buffer, caller
+ *                            must free with heap_caps_free()
+ * @param[out] out_len        Size of *out in bytes
+ * @param[out] width          Actual decoded width in pixels
+ * @param[out] height         Actual decoded height in pixels
+ * @param[out] stride         Row stride of *out in bytes
+ * @param[out] scaled         Set to true if scaling was applied
+ *
+ * @return ESP_OK on success, same error codes as jpeg_to_image() otherwise.
+ *
+ * @note Software decoder only — the hardware JPEG decoder path used by
+ *       jpeg_to_image() does not support scale-during-decode.
+ */
+esp_err_t jpeg_to_image_scaled(const uint8_t* src, size_t src_len, uint16_t max_dimension, uint8_t** out,
+                               size_t* out_len, size_t* width, size_t* height, size_t* stride, bool* scaled);
 
 #ifdef __cplusplus
 }

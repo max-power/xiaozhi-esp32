@@ -7,6 +7,8 @@
 #include <esp_log.h>
 #include <esp_app_desc.h>
 #include <algorithm>
+#include <cctype>
+#include <cstdio>
 #include <cstring>
 #include <esp_pthread.h>
 #include <freertos/FreeRTOS.h>
@@ -119,6 +121,62 @@ void McpServer::AddCommonTools() {
                 }
                 auto question = properties["question"].value<std::string>();
                 return camera->Explain(question);
+            });
+
+        AddTool("self.explain_image",
+            "Explain an existing image file (e.g. on an SD card), without taking a new photo.\n"
+            "Args:\n"
+            "  `path`: Path to the image file, relative to the storage root (e.g. \"photos/img_1.jpg\").\n"
+            "  `question`: The question that you want to ask about the image.\n"
+            "Return:\n"
+            "  A JSON object that provides the analysis, or an error if the file can't be read.",
+            PropertyList({
+                Property("path", kPropertyTypeString),
+                Property("question", kPropertyTypeString)
+            }),
+            [camera](const PropertyList& properties) -> ReturnValue {
+                auto path = properties["path"].value<std::string>();
+                auto question = properties["question"].value<std::string>();
+
+                // Sanitise a relative path: strip leading '/', reject '..'
+                while (!path.empty() && path[0] == '/') path.erase(path.begin());
+                if (path.empty() || path.find("..") != std::string::npos) {
+                    throw std::runtime_error("Invalid path");
+                }
+
+                FILE* f = fopen(("/sdcard/" + path).c_str(), "rb");
+                if (!f) {
+                    throw std::runtime_error("File not found: " + path);
+                }
+                fseek(f, 0, SEEK_END);
+                long size = ftell(f);
+                fseek(f, 0, SEEK_SET);
+                if (size <= 0) {
+                    fclose(f);
+                    throw std::runtime_error("File is empty");
+                }
+
+                std::string content_type = "image/jpeg";
+                auto dot = path.rfind('.');
+                if (dot != std::string::npos) {
+                    std::string ext = path.substr(dot);
+                    for (char& c : ext) c = (char)tolower((unsigned char)c);
+                    if (ext == ".png") content_type = "image/png";
+                    else if (ext == ".gif") content_type = "image/gif";
+                    else if (ext == ".bmp") content_type = "image/bmp";
+                    else if (ext == ".webp") content_type = "image/webp";
+                }
+
+                // Lower the priority, same as take_photo, while we upload
+                TaskPriorityReset priority_reset(1);
+                try {
+                    auto result = camera->ExplainFile(f, (size_t)size, content_type, question);
+                    fclose(f);
+                    return result;
+                } catch (...) {
+                    fclose(f);
+                    throw;
+                }
             });
     }
 #endif
