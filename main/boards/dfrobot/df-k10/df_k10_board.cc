@@ -3,7 +3,6 @@
 #include "display/lcd_display.h"
 #include "esp_lcd_ili9341.h"
 #include "led_control.h"
-#include "morse_signaler.h"
 #include "application.h"
 #include "button.h"
 #include "config.h"
@@ -257,7 +256,6 @@ private:
     void InitializeIot() {
         led_strip_ = new CircularStrip(BUILTIN_LED_GPIO, 3);
         new LedStripControl(led_strip_);
-        new MorseSignaler(led_strip_);
     }
 
 public:
