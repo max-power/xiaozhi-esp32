@@ -707,14 +707,16 @@ def get_emoji_collection_path(default_emoji_collection, noto_fonts_path, project
     Supports:
     - PNG emoji collections from noto-fonts (e.g., noto-color-emoji_32)
     - Otto GIF emoji collection (otto-gif)
+    - Locally vendored GIF collections under assets/emoji-gif/ (e.g. noto-emoji_128,
+      restored after upstream noto-fonts 2.0.0 dropped its gif/ directory)
     """
     if not default_emoji_collection:
         return None
-    
+
     # Special handling for otto-gif collection
     if default_emoji_collection == 'otto-gif':
         if project_root:
-            otto_gif_path = os.path.join(project_root, 'managed_components', 
+            otto_gif_path = os.path.join(project_root, 'managed_components',
                                         'txp666__otto-emoji-gif-component', 'gifs')
             if os.path.exists(otto_gif_path):
                 return otto_gif_path
@@ -724,7 +726,14 @@ def get_emoji_collection_path(default_emoji_collection, noto_fonts_path, project
         else:
             print("Warning: project_root not provided, cannot locate otto-gif collection")
             return None
-    
+
+    # Locally vendored collections (see assets/emoji-gif/NOTICE.md) take priority,
+    # since upstream noto-fonts no longer ships every collection it once did.
+    if project_root:
+        vendored_path = os.path.join(project_root, 'assets', 'emoji-gif', default_emoji_collection)
+        if os.path.exists(vendored_path):
+            return vendored_path
+
     # Try PNG emoji collections first.
     emoji_path = os.path.join(noto_fonts_path, 'png', default_emoji_collection)
     if os.path.exists(emoji_path):

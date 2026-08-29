@@ -58,6 +58,7 @@ list(APPEND SOURCES
     "boards/common/button.cc"
     "boards/common/i2c_device.cc"
     "boards/common/knob.cc"
+    "boards/common/morse_code.cc"
     "boards/common/power_save_timer.cc"
     "boards/common/press_to_talk_mcp_tool.cc"
     "boards/common/sleep_timer.cc"
@@ -113,7 +114,7 @@ elseif(CONFIG_BOARD_TYPE_DF_K10)
     set(BOARD_DIR "dfrobot/df-k10")
     set(BUILTIN_TEXT_FONT font_noto_sans_basic_20_4)
     set(BUILTIN_ICON_FONT font_material_symbols_20_4)
-    set(DEFAULT_EMOJI_COLLECTION noto-color-emoji_128)
+    set(DEFAULT_EMOJI_COLLECTION fluent-emoji_128)
 elseif(CONFIG_BOARD_TYPE_DF_S3_AI_CAM)
     set(BOARD_DIR "dfrobot/df-s3-ai-cam")
 elseif(CONFIG_BOARD_TYPE_ESP32_S3_BOX_3)
@@ -1243,6 +1244,8 @@ function(build_default_assets_bin)
         list(APPEND BUILD_ARGS "--emoji_collection" "${DEFAULT_EMOJI_COLLECTION}")
         file(GLOB DEFAULT_EMOJI_FILES CONFIGURE_DEPENDS
             "${NOTO_FONTS_PATH}/png/${DEFAULT_EMOJI_COLLECTION}/*"
+            "${NOTO_FONTS_PATH}/gif/${DEFAULT_EMOJI_COLLECTION}/*"
+            "${PROJECT_DIR}/assets/emoji-gif/${DEFAULT_EMOJI_COLLECTION}/*"
         )
         list(APPEND DEFAULT_ASSETS_DEPENDENCIES ${DEFAULT_EMOJI_FILES})
     endif()
