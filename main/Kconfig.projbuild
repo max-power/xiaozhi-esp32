@@ -6,6 +6,15 @@ config OTA_URL
     help
         The application will access this URL to check for new firmwares and server address.
 
+config XIAOZHI_MDNS_HOSTNAME
+    string "mDNS hostname"
+    default "xiaozhi"
+    help
+        Boards with a local-network web dashboard (e.g. the DFRobot K10)
+        advertise it over mDNS at http://<hostname>.local. Change this if
+        you have more than one such device on the same network and need
+        distinct .local names.
+
 choice
     prompt "Flash Assets"
     default FLASH_DEFAULT_ASSETS if !USE_EMOTE_MESSAGE_STYLE

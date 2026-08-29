@@ -25,7 +25,7 @@
 #include <sys/stat.h>
 
 #define TAG "WebServer"
-#define HOSTNAME "k10"
+#define HOSTNAME CONFIG_XIAOZHI_MDNS_HOSTNAME
 
 // HTML embedded at build time via CMake's EMBED_FILES (main/CMakeLists.txt).
 extern const uint8_t web_dashboard_html_start[] asm("_binary_web_dashboard_html_start");
