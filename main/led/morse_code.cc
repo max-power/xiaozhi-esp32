@@ -43,13 +43,9 @@ std::vector<std::string> SplitWords(const std::string& text) {
 
 }  // namespace
 
-std::vector<MorseSignal> EncodeMorse(const std::string& text, int wpm) {
-    if (wpm <= 0) {
-        wpm = 20;
-    }
-    const int unit_ms = 1200 / wpm;
+std::vector<bool> EncodeMorseTicks(const std::string& text) {
     const auto& table = MorseTable();
-    std::vector<MorseSignal> signals;
+    std::vector<bool> ticks;
 
     auto words = SplitWords(text);
     for (size_t w = 0; w < words.size(); ++w) {
@@ -63,19 +59,19 @@ std::vector<MorseSignal> EncodeMorse(const std::string& text, int wpm) {
             }
             const auto& pattern = it->second;
             for (size_t i = 0; i < pattern.size(); ++i) {
-                int duration = (pattern[i] == '.') ? unit_ms : unit_ms * 3;
-                signals.push_back({MorseSignalType::kTone, duration});
+                int on_ticks = (pattern[i] == '.') ? 1 : 3;
+                ticks.insert(ticks.end(), on_ticks, true);
                 if (i + 1 < pattern.size()) {
-                    signals.push_back({MorseSignalType::kSilence, unit_ms});  // intra-character gap
+                    ticks.push_back(false);  // intra-character gap
                 }
             }
             if (c + 1 < word.size()) {
-                signals.push_back({MorseSignalType::kSilence, unit_ms * 3});  // inter-character gap
+                ticks.insert(ticks.end(), 3, false);  // inter-character gap
             }
         }
         if (w + 1 < words.size()) {
-            signals.push_back({MorseSignalType::kSilence, unit_ms * 7});  // inter-word gap
+            ticks.insert(ticks.end(), 7, false);  // inter-word gap
         }
     }
-    return signals;
+    return ticks;
 }

@@ -9,6 +9,7 @@
 #include <esp_timer.h>
 #include <atomic>
 #include <mutex>
+#include <string>
 #include <vector>
 
 #define DEFAULT_BRIGHTNESS 32
@@ -31,6 +32,9 @@ public:
     void Blink(StripColor color, int interval_ms);
     void Breathe(StripColor low, StripColor high, int interval_ms);
     void Scroll(StripColor low, StripColor high, int length, int interval_ms);
+    // Blinks text out in Morse code. wpm sets the unit duration (1200/wpm ms);
+    // the default (8) is tuned to be readable by eye rather than by ear.
+    void Morse(StripColor color, const std::string& text, int wpm = 8);
 
 private:
     std::mutex mutex_;
@@ -52,6 +56,9 @@ private:
     bool       breathe_up_      = true;
     StripColor breathe_color_   = {};
     int        scroll_offset_   = 0;
+    std::vector<bool> morse_ticks_;
+    size_t     morse_index_     = 0;
+    StripColor morse_color_     = {};
 
     void StartStripTask(int interval_ms, std::function<void()> cb);
     void Rainbow(StripColor low, StripColor high, int interval_ms);
