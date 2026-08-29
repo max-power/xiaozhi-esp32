@@ -4,6 +4,7 @@
 #include "esp_lcd_ili9341.h"
 #include "led_control.h"
 #include "sd_control.h"
+#include "sensor_control.h"
 #include "application.h"
 #include "button.h"
 #include "config.h"
@@ -301,6 +302,7 @@ private:
         led_strip_ = new CircularStrip(BUILTIN_LED_GPIO, 3);
         new LedStripControl(led_strip_);
         InitializeSdTool(sd_mounted_);
+        InitializeSensorTool(i2c_bus_);
     }
 
 public:

@@ -56,7 +56,16 @@ void McpServer::AddCommonTools() {
             return board.GetDeviceStatusJson();
         });
 
-    AddTool("self.audio_speaker.set_volume", 
+    AddTool("self.mcp.discover",
+        "Search for other MCP servers that could grant new tools/capabilities.\n"
+        "Note: discovery is not implemented yet — this always returns an empty "
+        "list. Don't tell the user new capabilities were found from this call.",
+        PropertyList(),
+        [](const PropertyList& properties) -> ReturnValue {
+            return "{\"servers\":[]}";
+        });
+
+    AddTool("self.audio_speaker.set_volume",
         "Set the volume of the audio speaker. If the current volume is unknown, you must call `self.get_device_status` tool first and then call this tool.",
         PropertyList({
             Property("volume", kPropertyTypeInteger, 0, 100)
@@ -98,6 +107,21 @@ void McpServer::AddCommonTools() {
                     return true;
                 }
                 return false;
+            });
+    }
+
+    if (display) {
+        AddTool("self.notify",
+            "Show a short text notification on the device's screen.\n"
+            "Args:\n"
+            "  `message`: The text to display.",
+            PropertyList({
+                Property("message", kPropertyTypeString)
+            }),
+            [display](const PropertyList& properties) -> ReturnValue {
+                auto message = properties["message"].value<std::string>();
+                display->ShowNotification(message);
+                return true;
             });
     }
 
