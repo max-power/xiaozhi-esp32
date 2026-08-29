@@ -323,8 +323,23 @@ public:
     void AddTool(McpTool* tool);
     void AddTool(const std::string& name, const std::string& description, const PropertyList& properties, std::function<ReturnValue(const PropertyList&)> callback);
     void AddUserOnlyTool(const std::string& name, const std::string& description, const PropertyList& properties, std::function<ReturnValue(const PropertyList&)> callback);
+    void RemoveTool(const std::string& name);
     void ParseMessage(const cJSON* json);
     void ParseMessage(const std::string& message);
+
+    // ── Direct tool invocation (web server, internal callers) ─────────────────
+    // Synchronous from the caller's point of view, but the tool itself runs
+    // on the main application thread (like DoToolCall) so callbacks that
+    // assume that context (LVGL, Application state) stay safe. Blocks the
+    // calling thread until the tool completes — must be called from a task
+    // other than the main application thread, or it will deadlock.
+    // Throws std::runtime_error on unknown tool, missing args, or tool error.
+    // Returns the MCP content JSON string: {"content":[{"type":"text","text":"…"}],"isError":false}
+    std::string CallTool(const std::string& name, const cJSON* args);
+
+    // Returns all registered tools as a JSON array: [{name,description,inputSchema},…]
+    // Pass include_user_only=true to include user-facing-only tools.
+    std::string GetToolsJson(bool include_user_only = false);
 
 private:
     McpServer();
@@ -337,6 +352,10 @@ private:
 
     void GetToolsList(int id, const std::string& cursor, bool list_user_only_tools);
     void DoToolCall(int id, const std::string& tool_name, const cJSON* tool_arguments);
+
+    // Extract and validate arguments from a cJSON object into a tool's PropertyList.
+    // Throws std::runtime_error if a required argument is missing or invalid.
+    PropertyList FillArguments(McpTool* tool, const cJSON* args);
 
     std::vector<McpTool*> tools_;
 };
