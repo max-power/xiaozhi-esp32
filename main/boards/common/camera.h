@@ -1,6 +1,7 @@
 #ifndef CAMERA_H
 #define CAMERA_H
 
+#include <cstdint>
 #include <cstdio>
 #include <string>
 #include <stdexcept>
@@ -26,6 +27,14 @@ public:
     virtual std::string ExplainFile(FILE* file, size_t file_size, const std::string& content_type,
                                      const std::string& question) {
         throw std::runtime_error("This camera does not support explaining an image file");
+    }
+
+    // Capture a frame and JPEG-encode it, returning the encoded bytes (as a
+    // byte buffer, not text — std::string here is just a container).
+    // Optional: default throws, boards without a capture-capable camera
+    // implementation don't need to support this.
+    virtual bool CaptureJpeg(std::string& out_jpeg, uint8_t quality = 70) {
+        throw std::runtime_error("This camera does not support JPEG snapshot capture");
     }
 };
 

@@ -1,0 +1,646 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>DF-K10 Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:       #080808;
+  --surface:  #111;
+  --surface2: #181818;
+  --border:   #232323;
+  --text:     #e8e8e8;
+  --muted:    #505050;
+  --dim:      #2a2a2a;
+  --accent:   #e8e8e8;
+  --hi:       #fff;
+  --ui-accent: #4f8ef7;
+  --nav-w:    176px;
+  --mono: 'JetBrains Mono', ui-monospace, 'Fira Code', 'Consolas', monospace;
+  --sans: system-ui, Inter, Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+[data-theme="light"] {
+  --bg:       #f2f2f2;
+  --surface:  #fff;
+  --surface2: #ebebeb;
+  --border:   #d8d8d8;
+  --text:     #141414;
+  --muted:    #909090;
+  --dim:      #e0e0e0;
+  --accent:   #141414;
+  --hi:       #000;
+  --ui-accent: #2563eb;
+}
+
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14px;min-height:100vh;accent-color:var(--ui-accent)}
+
+.layout{display:flex;min-height:100vh;max-width:920px;margin:0 auto}
+.sidebar{width:var(--nav-w);flex-shrink:0;display:flex;flex-direction:column;border-right:1px solid var(--border);position:sticky;top:0;height:100vh;overflow:hidden}
+.logo-wrap{padding:20px 16px 14px;border-bottom:1px solid var(--border)}
+.logo-wrap h1{font-family:var(--mono);font-size:14px;font-weight:600;letter-spacing:.04em}
+.conn-block{margin-top:10px;display:flex;flex-direction:column;gap:3px}
+.conn-row{display:flex;align-items:center;gap:7px}
+.conn-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;background:var(--muted);transition:background .4s}
+.conn-dot.ok{background:#44aa44}
+.conn-dot.err{background:#aa4444}
+.conn-dot.connecting{background:var(--muted);animation:blink 1.2s ease-in-out infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.15}}
+.conn-label{font-family:var(--mono);font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+.conn-label.ok{color:#44aa44}
+.conn-label.err{color:#aa4444}
+.conn-ip{font-family:var(--mono);font-size:10px;color:var(--muted);padding-left:13px}
+
+.sidenav{flex:1;padding:8px 0;overflow-y:auto}
+.nav-item{display:block;width:100%;padding:9px 16px;background:none;border:none;border-left:2px solid transparent;color:var(--muted);font-family:var(--mono);font-size:11px;letter-spacing:.04em;text-align:left;cursor:pointer;transition:all .15s}
+.nav-item:hover{color:var(--text);background:var(--dim)}
+.nav-item.active{color:var(--hi);border-left-color:var(--accent);background:var(--surface2)}
+
+.sidebar-footer{padding:12px 16px;border-top:1px solid var(--border)}
+.web-theme-row{display:flex;gap:4px}
+.wt-btn{flex:1;padding:4px 0;background:var(--dim);border:1px solid var(--border);color:var(--muted);font-family:var(--mono);font-size:10px;border-radius:3px;cursor:pointer;transition:all .15s}
+.wt-btn.active,.wt-btn:hover{background:var(--surface2);color:var(--text);border-color:var(--accent)}
+
+.content{flex:1;min-width:0;padding:20px 20px 40px}
+.tab{display:none}
+.tab.active{display:block}
+
+.sec-title{font-family:var(--mono);font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);padding-bottom:8px}
+
+.card-row{display:flex;gap:12px;margin-bottom:12px}
+.card-row>.card{flex:1;min-width:0;margin-bottom:0}
+@media (max-width:600px){.card-row{flex-direction:column}.card-row>.card{margin-bottom:12px}}
+
+.card{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:14px 16px;margin-bottom:12px}
+.card h2{font-family:var(--mono);font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:10px}
+
+.row{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--border);font-size:12px}
+.row:last-child{border-bottom:none}
+.row>span:first-child{color:var(--muted)}
+.val{font-family:var(--mono);font-size:11px;font-weight:600}
+
+.sensor-row{display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--border)}
+.sensor-row:last-child{border-bottom:none}
+.sensor-lbl{font-family:var(--mono);font-size:10px;color:var(--muted);width:56px;flex-shrink:0;text-transform:uppercase}
+meter{flex:1;height:6px;border-radius:2px}
+meter::-webkit-meter-bar{background:var(--dim);border:none;border-radius:2px}
+meter::-webkit-meter-optimum-value{background:var(--text);border-radius:1px}
+output{font-family:var(--mono);font-size:11px;width:58px;text-align:right}
+
+button.btn{padding:7px 12px;background:var(--dim);border:1px solid var(--border);color:var(--text);font-family:var(--mono);font-size:11px;border-radius:4px;cursor:pointer;transition:all .15s}
+button.btn:hover{background:var(--surface2);border-color:var(--ui-accent)}
+button.btn.primary{background:var(--ui-accent);color:#fff;border-color:var(--ui-accent)}
+button.btn.danger:hover{border-color:#aa4444;color:#e88}
+.btn-row{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+
+input[type=text],input[type=password],input[type=number],select{background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:var(--mono);font-size:12px;padding:6px 8px;border-radius:4px;width:100%}
+label{font-size:11px;color:var(--muted);display:block;margin-bottom:4px}
+.field{margin-bottom:10px}
+
+input[type="range"]{width:100%;margin:4px 0;cursor:pointer}
+.hue-sl,.bright-sl{-webkit-appearance:none;appearance:none;width:100%;height:12px;border-radius:6px;outline:none;border:none;cursor:pointer;margin:6px 0}
+.hue-sl{background:linear-gradient(to right,hsl(0,100%,50%),hsl(30,100%,50%),hsl(60,100%,50%),hsl(90,100%,50%),hsl(120,100%,50%),hsl(150,100%,50%),hsl(180,100%,50%),hsl(210,100%,50%),hsl(240,100%,50%),hsl(270,100%,50%),hsl(300,100%,50%),hsl(330,100%,50%),hsl(360,100%,50%))}
+.bright-sl{background:linear-gradient(to right,#000,#f00)}
+.hue-sl::-webkit-slider-thumb,.bright-sl::-webkit-slider-thumb{-webkit-appearance:none;width:20px;height:20px;border-radius:50%;background:#fff;border:2px solid #000;box-shadow:0 1px 4px rgba(0,0,0,.5);cursor:pointer}
+.hue-sl::-moz-range-thumb,.bright-sl::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:#fff;border:2px solid #000;cursor:pointer}
+
+img#snap{max-width:100%;border-radius:4px;border:1px solid var(--border);display:none}
+#snap-ph{color:var(--muted);font-size:12px;padding:30px 0;text-align:center}
+
+.file-row{display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:12px}
+.file-row:last-child{border-bottom:none}
+.file-name{cursor:pointer;color:var(--text)}
+.file-name.dir::before{content:"📁 "}
+.file-name:not(.dir)::before{content:"📄 "}
+.file-size{color:var(--muted);font-family:var(--mono);font-size:10px}
+
+.net-row{display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:12px}
+.net-row:last-child{border-bottom:none}
+.net-cur::after{content:" (current)";color:var(--muted);font-size:10px}
+
+.tool-card{margin-bottom:10px}
+.tool-card summary{cursor:pointer;font-family:var(--mono);font-size:12px;font-weight:600}
+.tool-desc{color:var(--muted);font-size:11px;margin:8px 0;white-space:pre-wrap}
+.tool-result{background:var(--surface2);border-radius:4px;padding:8px;margin-top:8px;font-family:var(--mono);font-size:11px;white-space:pre-wrap;word-break:break-all;display:none}
+
+#toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--surface2);border:1px solid var(--border);padding:8px 16px;border-radius:6px;font-size:12px;opacity:0;pointer-events:none;transition:all .25s}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+<div class="layout">
+  <div class="sidebar">
+    <div class="logo-wrap">
+      <h1>DF-K10</h1>
+      <div class="conn-block">
+        <div class="conn-row"><span class="conn-dot connecting" id="conn-dot"></span><span class="conn-label" id="conn-label">Connecting…</span></div>
+        <div class="conn-ip" id="hdr-ip">—</div>
+      </div>
+    </div>
+    <div class="sidenav" id="sidenav">
+      <button class="nav-item active" data-tab="status">Status</button>
+      <button class="nav-item" data-tab="camera">Camera</button>
+      <button class="nav-item" data-tab="device">Device</button>
+      <button class="nav-item" data-tab="wifi">WiFi</button>
+      <button class="nav-item" data-tab="files">Files</button>
+      <button class="nav-item" data-tab="tools">Tools</button>
+    </div>
+    <div class="sidebar-footer">
+      <div class="web-theme-row">
+        <button class="wt-btn active" data-webtheme="dark">Dark</button>
+        <button class="wt-btn" data-webtheme="light">Light</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="content">
+    <!-- ── Status ── -->
+    <div class="tab active" id="tab-status">
+      <div class="card-row">
+        <div class="card">
+          <h2>Network</h2>
+          <div class="row"><span>SSID</span><span class="val" id="s-ssid">—</span></div>
+          <div class="row"><span>RSSI</span><span class="val" id="s-rssi">—</span></div>
+          <div class="row"><span>IP</span><span class="val" id="s-ip">—</span></div>
+          <div class="row"><span>Uptime</span><span class="val" id="s-uptime">—</span></div>
+        </div>
+        <div class="card">
+          <h2>Device</h2>
+          <div class="row"><span>Theme</span><span class="val" id="s-theme">—</span></div>
+          <div class="row"><span>Brightness</span><span class="val" id="s-bright">—</span></div>
+          <div class="row"><span>Battery</span><span class="val" id="s-battery">—</span></div>
+          <div class="row"><span>Chip temp</span><span class="val" id="s-chiptemp">—</span></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Memory</h2>
+        <div class="sensor-row"><span class="sensor-lbl">Heap</span><meter id="m-heap" min="0"></meter><output id="s-heap">—</output></div>
+        <div class="sensor-row"><span class="sensor-lbl">PSRAM</span><meter id="m-psram" min="0"></meter><output id="s-psram">—</output></div>
+      </div>
+
+      <div class="card">
+        <h2>Sensors</h2>
+        <div class="sensor-row"><span class="sensor-lbl">Temp</span><meter id="g-temp" min="0" max="50" low="10" high="35" optimum="22"></meter><output id="g-temp-val">—</output></div>
+        <div class="sensor-row"><span class="sensor-lbl">Humidity</span><meter id="g-humi" min="0" max="100"></meter><output id="g-humi-val">—</output></div>
+        <div class="sensor-row"><span class="sensor-lbl">Light</span><meter id="g-lux" min="0" max="2000"></meter><output id="g-lux-val">—</output></div>
+        <div class="row"><span>Orientation (x,y,z)</span><span class="val" id="s-orient">—</span></div>
+      </div>
+
+      <div class="card">
+        <h2>Board</h2>
+        <div class="row"><span>MAC</span><span class="val" id="s-mac">—</span></div>
+        <div class="row"><span>Chip</span><span class="val" id="s-chip">—</span></div>
+        <div class="row"><span>Flash</span><span class="val" id="s-flash">—</span></div>
+        <div class="row"><span>IDF</span><span class="val" id="s-idf">—</span></div>
+        <div class="row"><span>App version</span><span class="val" id="s-appver">—</span></div>
+        <div class="row"><span>Compiled</span><span class="val" id="s-compiled">—</span></div>
+        <div class="btn-row"><button class="btn danger" onclick="rebootDevice()">Reboot</button></div>
+      </div>
+    </div>
+
+    <!-- ── Camera ── -->
+    <div class="tab" id="tab-camera">
+      <div class="card">
+        <h2>Snapshot</h2>
+        <div id="snap-ph">No snapshot yet</div>
+        <img id="snap"/>
+        <div class="btn-row"><button class="btn primary" onclick="takeSnapshot()">Capture</button></div>
+      </div>
+    </div>
+
+    <!-- ── Device (LED + Volume + Theme) ── -->
+    <div class="tab" id="tab-device">
+      <div class="card">
+        <h2>LED ring</h2>
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
+          <div id="led-preview" style="width:36px;height:36px;border-radius:50%;border:1px solid var(--border);flex-shrink:0"></div>
+          <div style="flex:1">
+            <div class="field"><label>Hue (<span id="led-hue-val">0</span>°)</label><input type="range" class="hue-sl" id="led-hue" min="0" max="359" value="0"></div>
+            <div class="field" style="margin-bottom:0"><label>Brightness (<span id="led-bright-val">50</span>%)</label><input type="range" class="bright-sl" id="led-bright" min="1" max="255" value="128"></div>
+          </div>
+        </div>
+        <div class="btn-row">
+          <button class="btn" onclick="ledAction('set')">Set</button>
+          <button class="btn" onclick="ledAction('blink')">Blink</button>
+          <button class="btn" onclick="ledAction('pulse')">Pulse</button>
+          <button class="btn" onclick="ledAction('scroll')">Scroll</button>
+          <button class="btn danger" onclick="ledAction('off')">Off</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Volume</h2>
+        <div class="field"><label>Level (<span id="vol-val">—</span>%)</label><input type="range" id="vol" min="0" max="100" oninput="setVolume(this.value)"></div>
+      </div>
+
+      <div class="card">
+        <h2>Theme</h2>
+        <div class="btn-row">
+          <button class="btn" id="theme-light" onclick="setDeviceTheme('light')">Light</button>
+          <button class="btn" id="theme-dark" onclick="setDeviceTheme('dark')">Dark</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── WiFi ── -->
+    <div class="tab" id="tab-wifi">
+      <div class="card">
+        <h2>Saved networks</h2>
+        <div id="wifi-list"></div>
+      </div>
+      <div class="card">
+        <h2>Add network</h2>
+        <div class="field"><label>SSID</label><input type="text" id="wifi-ssid"></div>
+        <div class="field"><label>Password</label><input type="password" id="wifi-pass"></div>
+        <div class="btn-row"><button class="btn primary" onclick="addWifi()">Save &amp; reconnect</button></div>
+      </div>
+    </div>
+
+    <!-- ── Files ── -->
+    <div class="tab" id="tab-files">
+      <div class="card">
+        <h2>SD card — <span id="fs-path">/</span></h2>
+        <div id="fs-not-mounted" style="display:none;color:var(--muted);font-size:12px">Not mounted.</div>
+        <button class="btn" id="fs-up" onclick="fsUp()" style="margin-bottom:8px;display:none">.. up</button>
+        <div id="fs-list"></div>
+      </div>
+      <div class="card" id="fs-preview-card" style="display:none">
+        <h2>Preview</h2>
+        <img id="fs-preview" style="max-width:100%;border-radius:4px;border:1px solid var(--border)"/>
+      </div>
+    </div>
+
+    <!-- ── Tools ── -->
+    <div class="tab" id="tab-tools">
+      <div class="card">
+        <h2>MCP tools</h2>
+        <div style="color:var(--muted);font-size:11px;margin-bottom:10px">Every tool the assistant can call, invoked directly from here.</div>
+        <div id="tools-list">Loading…</div>
+      </div>
+    </div>
+  </div>
+</div>
+<div id="toast"></div>
+
+<script>
+function $(id){ return document.getElementById(id); }
+
+// ── Nav ──────────────────────────────────────────────────────────────────
+document.querySelectorAll('.nav-item').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    btn.classList.add('active');
+    $('tab-' + btn.dataset.tab).classList.add('active');
+    if (btn.dataset.tab === 'wifi') refreshWifi();
+    if (btn.dataset.tab === 'files') fsLoad('');
+    if (btn.dataset.tab === 'tools') loadTools();
+  });
+});
+
+// ── Web page theme (cosmetic only, independent of device theme) ──────────
+document.querySelectorAll('.wt-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.documentElement.dataset.theme = btn.dataset.webtheme;
+    document.querySelectorAll('.wt-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    try { localStorage.setItem('web-theme', btn.dataset.webtheme); } catch(e) {}
+  });
+});
+try {
+  const saved = localStorage.getItem('web-theme');
+  if (saved) document.querySelector(`.wt-btn[data-webtheme="${saved}"]`)?.click();
+} catch(e) {}
+
+// ── Toast ────────────────────────────────────────────────────────────────
+function toast(msg, ok=true) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.style.borderColor = ok ? 'var(--border)' : '#a03030';
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// ── API ──────────────────────────────────────────────────────────────────
+async function api(method, path, body) {
+  try {
+    const r = await fetch(path, {
+      method,
+      headers: body ? {'Content-Type':'application/json'} : {},
+      body: body ? JSON.stringify(body) : undefined
+    });
+    return r.ok ? r.json() : null;
+  } catch(e) { return null; }
+}
+
+function kb(n) { return n >= 1024 ? (n/1024).toFixed(0)+'KB' : n+'B'; }
+function uptime(s) {
+  const h=Math.floor(s/3600), m=Math.floor((s%3600)/60), sec=Math.floor(s%60);
+  return h ? `${h}h ${m}m` : m ? `${m}m ${sec}s` : `${sec}s`;
+}
+function setGauge(id, val, txt) {
+  const m=$(id); if(m) m.value=val;
+  $(id+'-val').textContent=txt;
+}
+
+// ── Status ───────────────────────────────────────────────────────────────
+async function refreshStatus() {
+  const d = await api('GET','/api/status');
+  if (d) applyStatus(d);
+}
+
+function applyStatus(d) {
+  $('s-ssid').textContent   = d.ssid   || '—';
+  $('s-rssi').textContent   = d.rssi   ? d.rssi+' dBm' : '—';
+  $('s-ip').textContent     = d.ip     || '—';
+  $('hdr-ip').textContent   = d.ip     || '—';
+  const dot=$('conn-dot'), lbl=$('conn-label');
+  dot.className='conn-dot ok';
+  lbl.className='conn-label ok';
+  lbl.textContent='Connected';
+  $('s-uptime').textContent = uptime(d.uptime_s||0);
+  if (d.total_heap)  { $('m-heap').max=d.total_heap;  $('m-heap').low=d.total_heap*.15;  $('m-heap').optimum=d.total_heap;  $('m-heap').value=d.free_heap; }
+  if (d.total_psram) { $('m-psram').max=d.total_psram;$('m-psram').low=d.total_psram*.15;$('m-psram').optimum=d.total_psram;$('m-psram').value=d.free_psram; }
+  $('s-heap').textContent  = kb(d.free_heap||0)+' / '+kb(d.total_heap||0);
+  $('s-psram').textContent = kb(d.free_psram||0)+' / '+kb(d.total_psram||0);
+  if (d.sensors && d.sensors.valid) {
+    const s=d.sensors;
+    if (s.temperature !== undefined) setGauge('g-temp', s.temperature, s.temperature.toFixed(1)+'°C');
+    if (s.humidity    !== undefined) setGauge('g-humi', s.humidity,    s.humidity.toFixed(0)+'%');
+    if (s.lux         !== undefined) setGauge('g-lux',  s.lux, s.lux<1000 ? s.lux.toFixed(0)+' lx' : (s.lux/1000).toFixed(1)+'k lx');
+  }
+  if (d.theme      !== undefined) $('s-theme').textContent  = d.theme.charAt(0).toUpperCase()+d.theme.slice(1);
+  if (d.brightness !== undefined) $('s-bright').textContent = d.brightness+'%';
+  if (d.battery)   { const b=d.battery; $('s-battery').textContent = b.level+'%'+(b.charging?' ⚡':''); }
+  if (d.chip_temp  !== undefined) $('s-chiptemp').textContent = d.chip_temp.toFixed(1)+'°C';
+  if (d.board) {
+    const b=d.board;
+    $('s-mac').textContent      = b.mac      || '—';
+    $('s-chip').textContent     = (b.chip||'—')+' · '+b.cores+' cores · rev '+b.revision;
+    $('s-flash').textContent    = b.flash_size ? (b.flash_size/1048576).toFixed(0)+' MB' : '—';
+    $('s-idf').textContent      = b.idf_ver    || '—';
+    $('s-appver').textContent   = b.app_ver    || '—';
+    $('s-compiled').textContent = b.compiled   || '—';
+  }
+  if (d.volume !== undefined) { $('vol').value=d.volume; $('vol-val').textContent=d.volume; }
+}
+
+function applyOrient(d) {
+  $('s-orient').textContent = `${d.x.toFixed(2)}, ${d.y.toFixed(2)}, ${d.z.toFixed(2)}`;
+}
+
+async function rebootDevice() {
+  if (!confirm('Reboot the device?')) return;
+  await api('POST','/api/reboot');
+  toast('Rebooting…');
+}
+
+// ── Camera ───────────────────────────────────────────────────────────────
+async function takeSnapshot() {
+  $('snap-ph').textContent='Capturing…';
+  $('snap-ph').style.display='block';
+  $('snap').style.display='none';
+  const r = await api('POST','/api/snapshot');
+  if (r && r.ok) {
+    $('snap').src='/snapshot.jpg?t='+Date.now();
+    $('snap').style.display='block';
+    $('snap-ph').style.display='none';
+  } else {
+    $('snap-ph').textContent='Capture failed';
+    toast('Snapshot failed', false);
+  }
+}
+
+// ── LED ──────────────────────────────────────────────────────────────────
+function hueRgb(h) {
+  const k = n => (n + h/30) % 12, a = 0.5;
+  const f = n => Math.round((0.5 - a * Math.max(-1, Math.min(k(n)-3, Math.min(9-k(n), 1)))) * 255);
+  return { r: f(0), g: f(8), b: f(4) };
+}
+function updateHuePreview() {
+  const h = parseInt($('led-hue').value, 10);
+  const { r, g, b } = hueRgb(h);
+  $('led-preview').style.background = `rgb(${r},${g},${b})`;
+  $('led-hue-val').textContent = h;
+  $('led-bright').style.background = `linear-gradient(to right,#000,rgb(${r},${g},${b}))`;
+}
+$('led-hue').addEventListener('input', updateHuePreview);
+$('led-bright').addEventListener('input', () => {
+  $('led-bright-val').textContent = Math.round($('led-bright').value / 255 * 100);
+});
+updateHuePreview();
+
+async function ledAction(action) {
+  const { r, g, b } = hueRgb(parseInt($('led-hue').value, 10));
+  const brightness = parseInt($('led-bright').value, 10);
+  const ok = await api('POST','/api/led', { action, r, g, b, brightness });
+  if (ok) toast('LED: ' + action);
+  else toast('LED command failed', false);
+}
+
+// ── Volume ───────────────────────────────────────────────────────────────
+let volDebounce;
+function setVolume(v) {
+  $('vol-val').textContent = v;
+  clearTimeout(volDebounce);
+  volDebounce = setTimeout(() => api('POST','/api/volume', { volume: parseInt(v,10) }), 150);
+}
+
+// ── Theme ────────────────────────────────────────────────────────────────
+async function setDeviceTheme(theme) {
+  const ok = await api('POST','/api/theme', { theme });
+  if (ok) { toast('Theme: ' + theme); refreshStatus(); }
+  else toast('Theme change failed', false);
+}
+
+// ── WiFi ─────────────────────────────────────────────────────────────────
+async function refreshWifi() {
+  const d = await api('GET','/api/wifi');
+  const list = $('wifi-list');
+  list.innerHTML = '';
+  if (!d || !d.networks || !d.networks.length) {
+    list.innerHTML = '<div style="color:var(--muted);font-size:12px">No saved networks.</div>';
+    return;
+  }
+  d.networks.forEach((n, i) => {
+    const row = document.createElement('div');
+    row.className = 'net-row';
+    row.innerHTML = `<span class="${n.current?'net-cur':''}">${n.ssid}</span>`;
+    const del = document.createElement('button');
+    del.className = 'btn danger';
+    del.textContent = 'Remove';
+    del.onclick = async () => {
+      await api('DELETE','/api/wifi', { index: i });
+      refreshWifi();
+    };
+    row.appendChild(del);
+    list.appendChild(row);
+  });
+}
+
+async function addWifi() {
+  const ssid = $('wifi-ssid').value.trim();
+  const password = $('wifi-pass').value;
+  if (!ssid) { toast('SSID required', false); return; }
+  const ok = await api('POST','/api/wifi', { ssid, password });
+  if (ok) toast('Saved — device is reconnecting…');
+  else toast('Failed to save network', false);
+}
+
+// ── Files ────────────────────────────────────────────────────────────────
+let fsCurrentPath = '';
+async function fsLoad(path) {
+  fsCurrentPath = path;
+  $('fs-path').textContent = '/' + path;
+  $('fs-up').style.display = path ? 'inline-block' : 'none';
+  const encodedPath = path.split('/').map(encodeURIComponent).join('/');
+  const d = await api('GET', '/api/fs?path=' + encodedPath);
+  const list = $('fs-list');
+  list.innerHTML = '';
+  if (!d || !d.mounted) {
+    $('fs-not-mounted').style.display = 'block';
+    return;
+  }
+  $('fs-not-mounted').style.display = 'none';
+  if (!d.entries.length) {
+    list.innerHTML = '<div style="color:var(--muted);font-size:12px">Empty.</div>';
+    return;
+  }
+  d.entries
+    .sort((a,b) => (b.dir - a.dir) || a.name.localeCompare(b.name))
+    .forEach(e => {
+      const row = document.createElement('div');
+      row.className = 'file-row';
+      const rel = (path ? path + '/' : '') + e.name;
+      row.innerHTML = `<span class="file-name ${e.dir?'dir':''}">${e.name}</span><span class="file-size">${e.dir?'':kb(e.size)}</span>`;
+      row.querySelector('.file-name').onclick = () => {
+        if (e.dir) fsLoad(rel);
+        else fsOpen(rel);
+      };
+      if (!e.dir) {
+        const del = document.createElement('button');
+        del.className = 'btn danger';
+        del.textContent = 'Delete';
+        del.style.marginLeft = '8px';
+        del.onclick = async (ev) => {
+          ev.stopPropagation();
+          if (!confirm('Delete ' + e.name + '?')) return;
+          await fetch('/api/files/' + rel.split('/').map(encodeURIComponent).join('/'), { method: 'DELETE' });
+          fsLoad(path);
+        };
+        row.appendChild(del);
+      }
+      list.appendChild(row);
+    });
+}
+function fsUp() {
+  const parts = fsCurrentPath.split('/'); parts.pop();
+  fsLoad(parts.join('/'));
+}
+function fsOpen(rel) {
+  const url = '/api/files/' + rel.split('/').map(encodeURIComponent).join('/');
+  if (/\.(jpe?g|png|bmp)$/i.test(rel)) {
+    $('fs-preview').src = url + '?t=' + Date.now();
+    $('fs-preview-card').style.display = 'block';
+  } else {
+    window.open(url, '_blank');
+  }
+}
+
+// ── Tools ────────────────────────────────────────────────────────────────
+async function loadTools() {
+  const list = $('tools-list');
+  const res = await fetch('/api/tools');
+  if (!res.ok) { list.innerHTML = 'Failed to load tools.'; return; }
+  const tools = await res.json();
+  list.innerHTML = '';
+  tools.forEach(tool => {
+    const card = document.createElement('details');
+    card.className = 'card tool-card';
+    const props = (tool.inputSchema && tool.inputSchema.properties) || {};
+    const propNames = Object.keys(props);
+    let fields = '';
+    propNames.forEach(name => {
+      const p = props[name];
+      const desc = (p.description||'').replace(/"/g,'&quot;');
+      if (p.type === 'boolean') {
+        fields += `<div class="field"><label><input type="checkbox" data-arg="${name}" data-argtype="boolean" ${p.default?'checked':''}> ${name}</label></div>`;
+      } else if (p.type === 'integer') {
+        const bounds = (p.minimum!==undefined?` min="${p.minimum}"`:'') + (p.maximum!==undefined?` max="${p.maximum}"`:'');
+        fields += `<div class="field"><label>${name}</label><input type="number" data-arg="${name}" data-argtype="integer"${bounds} placeholder="${desc}" value="${p.default!==undefined?p.default:''}"></div>`;
+      } else {
+        fields += `<div class="field"><label>${name}</label><input type="text" data-arg="${name}" data-argtype="string" placeholder="${desc}" value="${p.default!==undefined?String(p.default).replace(/"/g,'&quot;'):''}"></div>`;
+      }
+    });
+    card.innerHTML = `
+      <summary>${tool.name}</summary>
+      <div class="tool-desc">${(tool.description||'').replace(/</g,'&lt;')}</div>
+      ${fields}
+      <div class="btn-row"><button class="btn primary">Call</button></div>
+      <div class="tool-result"></div>
+    `;
+    const resultBox = card.querySelector('.tool-result');
+    card.querySelector('button').onclick = async () => {
+      const args = {};
+      card.querySelectorAll('[data-arg]').forEach(inp => {
+        const type = inp.dataset.argtype;
+        if (type === 'boolean') {
+          args[inp.dataset.arg] = inp.checked;
+        } else if (type === 'integer') {
+          if (inp.value !== '') args[inp.dataset.arg] = parseInt(inp.value, 10);
+        } else if (inp.value !== '') {
+          args[inp.dataset.arg] = inp.value;
+        }
+      });
+      resultBox.style.display = 'block';
+      resultBox.textContent = 'Calling…';
+      try {
+        const r = await fetch('/api/tool/' + encodeURIComponent(tool.name), {
+          method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(args)
+        });
+        const text = await r.text();
+        resultBox.textContent = text;
+      } catch(e) {
+        resultBox.textContent = 'Request failed: ' + e;
+      }
+    };
+    list.appendChild(card);
+  });
+  if (!tools.length) list.innerHTML = 'No tools registered.';
+}
+
+// ── Connectivity: WebSocket on-device, REST polling fallback off-device ──
+const ON_DEVICE = location.hostname !== 'localhost' && location.hostname !== '127.0.0.1';
+let _ws;
+function startWs() {
+  _ws = new WebSocket(`ws://${location.host}/ws`);
+  _ws.onopen = () => { $('conn-dot').className='conn-dot ok'; $('conn-label').className='conn-label ok'; $('conn-label').textContent='Connected'; };
+  _ws.onmessage = (ev) => {
+    try {
+      const d = JSON.parse(ev.data);
+      if (d.type === 'orient') applyOrient(d);
+      else if (d.type === 'status') applyStatus(d);
+    } catch(e) {}
+  };
+  _ws.onclose = () => {
+    $('conn-dot').className='conn-dot err'; $('conn-label').className='conn-label err'; $('conn-label').textContent='Not connected';
+    setTimeout(startWs, 3000);
+  };
+  _ws.onerror = () => _ws.close();
+}
+
+if (ON_DEVICE) {
+  startWs();
+  refreshStatus();
+} else {
+  refreshStatus();
+  setInterval(refreshStatus, 8000);
+  setInterval(async () => { const d = await api('GET','/api/orient'); if (d) applyOrient(d); }, 300);
+}
+</script>
+</body>
+</html>

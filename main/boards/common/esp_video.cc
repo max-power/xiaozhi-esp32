@@ -874,6 +874,21 @@ bool EspVideo::Capture() {
     return true;
 }
 
+bool EspVideo::CaptureJpeg(std::string& out_jpeg, uint8_t quality) {
+    if (!Capture()) return false;
+    if (!frame_.data || !frame_.len) return false;
+
+    uint8_t* jpeg = nullptr;
+    size_t jlen = 0;
+    if (!image_to_jpeg(frame_.data, frame_.len, frame_.width, frame_.height, frame_.format, quality, &jpeg, &jlen) ||
+        !jpeg) {
+        return false;
+    }
+    out_jpeg.assign((const char*)jpeg, jlen);
+    free(jpeg);
+    return true;
+}
+
 bool EspVideo::SetHMirror(bool enabled) {
     if (video_fd_ < 0)
         return false;

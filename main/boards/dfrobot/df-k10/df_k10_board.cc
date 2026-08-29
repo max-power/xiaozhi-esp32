@@ -5,6 +5,7 @@
 #include "led_control.h"
 #include "sd_control.h"
 #include "sensor_control.h"
+#include "web_server.h"
 #include "application.h"
 #include "button.h"
 #include "config.h"
@@ -21,6 +22,8 @@
 #include <esp_vfs_fat.h>
 #include <sdmmc_cmd.h>
 #include <driver/sdspi_host.h>
+#include <esp_netif.h>
+#include <esp_wifi.h>
 
 #include "esp_io_expander_tca95xx_16bit.h"
 
@@ -41,6 +44,7 @@ private:
     CircularStrip* led_strip_;
 
     bool sd_mounted_ = false;
+    WebServer* web_server_ = nullptr;
 
     static Df_K10Board* instance_;
 
@@ -258,6 +262,35 @@ private:
         camera_ = new EspVideo(video_config);
     }
 
+    // Starts the local-network dashboard once WiFi actually has an IP —
+    // starting it earlier (e.g. unconditionally in the constructor) would
+    // just mean nothing on the network can reach it yet. Polls rather than
+    // hooking IP_EVENT directly: at board-construction time (this runs from
+    // the constructor) the default ESP-IDF event loop doesn't exist yet —
+    // it's created later, inside WifiManager::Initialize() — so registering
+    // an IP_EVENT handler here would silently never fire. Board's own
+    // NetworkEventCallback isn't an option either: Application owns that
+    // single callback slot already.
+    void InitializeWebServer() {
+        xTaskCreate(
+            [](void* arg) {
+                auto* self = static_cast<Df_K10Board*>(arg);
+                esp_netif_t* netif = nullptr;
+                while (true) {
+                    vTaskDelay(pdMS_TO_TICKS(500));
+                    netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
+                    if (!netif) continue;
+                    esp_netif_ip_info_t ip_info = {};
+                    if (esp_netif_get_ip_info(netif, &ip_info) == ESP_OK && ip_info.ip.addr != 0) break;
+                }
+                self->web_server_ = new WebServer(self->camera_, self->led_strip_, self->GetAudioCodec(),
+                                                   self->sd_mounted_);
+                self->web_server_->Start();
+                vTaskDelete(nullptr);
+            },
+            "web_srv_wait", 3072, this, 3, nullptr);
+    }
+
     void InitializeIli9341Display() {
         esp_lcd_panel_io_handle_t panel_io = nullptr;
         esp_lcd_panel_handle_t panel = nullptr;
@@ -315,6 +348,7 @@ public:
         InitializeButtons();
         InitializeIot();
         InitializeCamera();
+        InitializeWebServer();
     }
 
     virtual Led* GetLed() override {

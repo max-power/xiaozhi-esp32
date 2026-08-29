@@ -39,8 +39,10 @@ esp_err_t I2cReadReg(i2c_master_dev_handle_t dev, uint8_t reg, uint8_t* buf, siz
     return i2c_master_receive(dev, buf, len, 100);
 }
 
+}  // namespace
+
 // AHT20 — blocks ~85ms while the sensor takes a measurement.
-bool ReadTemperature(float& temperature, float& humidity) {
+bool ReadSensorTemperature(float& temperature, float& humidity) {
     if (!aht20_dev) return false;
     uint8_t cmd[] = {0xAC, 0x33, 0x00};
     I2cWrite(aht20_dev, cmd, sizeof(cmd));
@@ -55,7 +57,7 @@ bool ReadTemperature(float& temperature, float& humidity) {
 }
 
 // LTR303-ALS — fast, no blocking delay.
-bool ReadLight(float& lux) {
+bool ReadSensorLight(float& lux) {
     if (!ltr303_dev) return false;
     uint8_t ch1[2] = {}, ch0[2] = {};
     I2cReadReg(ltr303_dev, 0x88, ch1, 2);
@@ -71,7 +73,7 @@ bool ReadLight(float& lux) {
 }
 
 // SC7A20H — fast, no blocking delay.
-bool ReadAccel(float& x, float& y, float& z) {
+bool ReadSensorAccel(float& x, float& y, float& z) {
     if (!sc7a20_dev) return false;
     uint8_t buf[6] = {};
     if (I2cReadReg(sc7a20_dev, 0x28 | 0x80, buf, sizeof(buf)) != ESP_OK) return false;
@@ -80,8 +82,6 @@ bool ReadAccel(float& x, float& y, float& z) {
     z = ((int16_t)((buf[5] << 8) | buf[4]) >> 4) / 1000.0f;
     return true;
 }
-
-}  // namespace
 
 void InitializeSensorTool(i2c_master_bus_handle_t i2c_bus) {
     i2c_device_config_t cfg = {};
@@ -120,7 +120,7 @@ void InitializeSensorTool(i2c_master_bus_handle_t i2c_bus) {
 
             if (sensor == "temperature" || sensor == "temp") {
                 float t = 0, h = 0;
-                if (!ReadTemperature(t, h)) return JsonError("Temperature sensor read failed");
+                if (!ReadSensorTemperature(t, h)) return JsonError("Temperature sensor read failed");
                 cJSON* json = cJSON_CreateObject();
                 cJSON_AddNumberToObject(json, "temperature", t);
                 cJSON_AddNumberToObject(json, "humidity", h);
@@ -129,7 +129,7 @@ void InitializeSensorTool(i2c_master_bus_handle_t i2c_bus) {
 
             if (sensor == "light" || sensor == "lux") {
                 float lux = 0;
-                if (!ReadLight(lux)) return JsonError("Light sensor read failed");
+                if (!ReadSensorLight(lux)) return JsonError("Light sensor read failed");
                 cJSON* json = cJSON_CreateObject();
                 cJSON_AddNumberToObject(json, "lux", lux);
                 return ToJsonString(json);
@@ -137,7 +137,7 @@ void InitializeSensorTool(i2c_master_bus_handle_t i2c_bus) {
 
             if (sensor == "accel" || sensor == "accelerometer") {
                 float x = 0, y = 0, z = 0;
-                if (!ReadAccel(x, y, z)) return JsonError("Accelerometer read failed");
+                if (!ReadSensorAccel(x, y, z)) return JsonError("Accelerometer read failed");
                 cJSON* json = cJSON_CreateObject();
                 cJSON_AddNumberToObject(json, "accel_x", x);
                 cJSON_AddNumberToObject(json, "accel_y", y);
@@ -151,9 +151,9 @@ void InitializeSensorTool(i2c_master_bus_handle_t i2c_bus) {
 
             // No sensor specified: read all, and include whichever succeed.
             float t = 0, h = 0, lux = 0, x = 0, y = 0, z = 0;
-            bool temp_ok = ReadTemperature(t, h);
-            bool light_ok = ReadLight(lux);
-            bool accel_ok = ReadAccel(x, y, z);
+            bool temp_ok = ReadSensorTemperature(t, h);
+            bool light_ok = ReadSensorLight(lux);
+            bool accel_ok = ReadSensorAccel(x, y, z);
             if (!temp_ok && !light_ok && !accel_ok) {
                 return JsonError("All sensor reads failed");
             }

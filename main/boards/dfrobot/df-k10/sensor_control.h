@@ -9,4 +9,10 @@
 // i2c_bus has been initialized.
 void InitializeSensorTool(i2c_master_bus_handle_t i2c_bus);
 
+// Direct reads, for callers other than self.sense (e.g. the web dashboard).
+// Same underlying I2C devices initialized by InitializeSensorTool() above.
+bool ReadSensorTemperature(float& temperature, float& humidity);
+bool ReadSensorLight(float& lux);
+bool ReadSensorAccel(float& x, float& y, float& z);
+
 #endif  // SENSOR_CONTROL_H

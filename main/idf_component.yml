@@ -36,6 +36,7 @@ dependencies:
   espressif/esp-sr: ~2.4.7
   espressif/button: ~4.2.0
   espressif/knob: ^1.0.0
+  espressif/mdns: '*'
   esphome/esp-hub75:
     version: ^0.3.5
     rules:

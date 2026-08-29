@@ -65,4 +65,5 @@ public:
     virtual std::string Explain(const std::string& question);
     virtual std::string ExplainFile(FILE* file, size_t file_size, const std::string& content_type,
                                      const std::string& question) override;
+    virtual bool CaptureJpeg(std::string& out_jpeg, uint8_t quality = 70) override;
 };
