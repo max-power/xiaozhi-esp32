@@ -68,6 +68,19 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 .tab{display:none}
 .tab.active{display:block}
 
+.mobile-topbar{display:none}
+.sidebar-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:250}
+.sidebar-backdrop.show{display:block}
+@media (max-width:700px){
+  .mobile-topbar{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--bg);z-index:150}
+  .mobile-topbar button{background:none;border:none;color:var(--text);font-size:20px;line-height:1;cursor:pointer;padding:2px 4px}
+  .mobile-topbar h1{font-family:var(--mono);font-size:13px;font-weight:600;letter-spacing:.04em}
+  .layout{display:block;max-width:none}
+  .sidebar{position:fixed;top:0;left:0;bottom:0;z-index:260;transform:translateX(-100%);transition:transform .2s ease;box-shadow:2px 0 12px rgba(0,0,0,.4)}
+  .sidebar.open{transform:translateX(0)}
+  .content{padding:14px 14px 32px}
+}
+
 .sec-title{font-family:var(--mono);font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);padding-bottom:8px}
 
 .card-row{display:flex;gap:12px;margin-bottom:12px}
@@ -110,12 +123,48 @@ input[type="range"]{width:100%;margin:4px 0;cursor:pointer}
 img#snap{max-width:100%;border-radius:4px;border:1px solid var(--border);display:none}
 #snap-ph{color:var(--muted);font-size:12px;padding:30px 0;text-align:center}
 
-.file-row{display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:12px}
-.file-row:last-child{border-bottom:none}
-.file-name{cursor:pointer;color:var(--text)}
-.file-name.dir::before{content:"📁 "}
-.file-name:not(.dir)::before{content:"📄 "}
-.file-size{color:var(--muted);font-family:var(--mono);font-size:10px}
+/* ── File browser ── */
+.fb{padding:0}
+.fb-crumbs{display:flex;flex-wrap:wrap;align-items:center;gap:2px;padding:2px 2px 10px;font-family:var(--mono);font-size:12px}
+.fb-crumb{color:var(--muted);cursor:pointer;padding:3px 5px;border-radius:3px;white-space:nowrap}
+.fb-crumb:hover{background:var(--dim);color:var(--text)}
+.fb-crumb.current{color:var(--text);cursor:default}
+.fb-crumb.current:hover{background:none}
+.fb-crumb-sep{color:var(--muted)}
+
+.fb-list{display:flex;flex-direction:column}
+.fb-row{display:flex;align-items:center;gap:10px;padding:12px 4px;border-bottom:1px solid var(--border);cursor:pointer}
+.fb-row:last-child{border-bottom:none}
+.fb-row:active{background:var(--dim)}
+.fb-icon{font-size:18px;width:22px;text-align:center;flex-shrink:0}
+.fb-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px}
+.fb-meta{color:var(--muted);font-family:var(--mono);font-size:10px;flex-shrink:0}
+.fb-kebab{background:none;border:none;color:var(--muted);font-size:20px;padding:4px 8px;cursor:pointer;flex-shrink:0;line-height:1}
+.fb-kebab:hover{color:var(--text)}
+.fb-empty{color:var(--muted);font-size:12px;padding:12px 4px}
+
+/* Full-screen overlay: view/edit a single file */
+.fb-overlay{position:fixed;inset:0;background:var(--bg);z-index:300;display:none;flex-direction:column}
+.fb-overlay.show{display:flex}
+.fb-overlay-header{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--border);flex-shrink:0}
+.fb-overlay-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--mono);font-size:12px}
+.fb-icon-btn{background:none;border:none;color:var(--text);font-size:18px;padding:4px 8px;cursor:pointer;flex-shrink:0}
+.fb-overlay-body{flex:1;overflow:auto;padding:14px;display:flex;flex-direction:column}
+.fb-overlay-body textarea{flex:1;width:100%;min-height:60vh;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:var(--mono);font-size:12px;padding:10px;border-radius:4px;resize:none}
+.fb-overlay-body img,.fb-overlay-body video{max-width:100%;display:block;margin:0 auto;border-radius:4px}
+.fb-overlay-body audio{width:100%;margin-top:20px}
+.fb-overlay-note{color:var(--muted);font-size:12px;margin-bottom:10px}
+
+/* Bottom action sheets (kebab menu, rename prompt) */
+.fb-sheet-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:400;display:none;align-items:flex-end;justify-content:center}
+.fb-sheet-backdrop.show{display:flex}
+.fb-sheet{background:var(--surface);border:1px solid var(--border);border-radius:12px 12px 0 0;padding:14px;width:100%;max-width:480px}
+@media (min-width:600px){.fb-sheet-backdrop{align-items:center}.fb-sheet{border-radius:8px}}
+.fb-sheet-title{font-family:var(--mono);font-size:12px;color:var(--muted);padding:4px 6px 10px;word-break:break-all}
+.fb-sheet-item{display:block;width:100%;text-align:left;padding:13px 6px;background:none;border:none;border-top:1px solid var(--border);color:var(--text);font-size:14px;cursor:pointer}
+.fb-sheet-item:first-of-type{border-top:none}
+.fb-sheet-item.danger{color:#e88}
+.fb-sheet-item:hover{background:var(--dim)}
 
 .net-row{display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:12px}
 .net-row:last-child{border-bottom:none}
@@ -131,8 +180,13 @@ img#snap{max-width:100%;border-radius:4px;border:1px solid var(--border);display
 </style>
 </head>
 <body>
+<div class="mobile-topbar">
+  <button id="mobile-menu-btn" aria-label="Menu">☰</button>
+  <h1>DF-K10</h1>
+</div>
+<div class="sidebar-backdrop" id="sidebar-backdrop"></div>
 <div class="layout">
-  <div class="sidebar">
+  <div class="sidebar" id="sidebar">
     <div class="logo-wrap">
       <h1>DF-K10</h1>
       <div class="conn-block">
@@ -262,15 +316,11 @@ img#snap{max-width:100%;border-radius:4px;border:1px solid var(--border);display
 
     <!-- ── Files ── -->
     <div class="tab" id="tab-files">
-      <div class="card">
-        <h2>SD card — <span id="fs-path">/</span></h2>
-        <div id="fs-not-mounted" style="display:none;color:var(--muted);font-size:12px">Not mounted.</div>
-        <button class="btn" id="fs-up" onclick="fsUp()" style="margin-bottom:8px;display:none">.. up</button>
-        <div id="fs-list"></div>
-      </div>
-      <div class="card" id="fs-preview-card" style="display:none">
-        <h2>Preview</h2>
-        <img id="fs-preview" style="max-width:100%;border-radius:4px;border:1px solid var(--border)"/>
+      <div class="card fb">
+        <div class="fb-crumbs" id="fb-crumbs"></div>
+        <div id="fb-not-mounted" style="display:none;color:var(--muted);font-size:12px;padding:4px 4px 8px">SD card not mounted.</div>
+        <div class="fb-list" id="fb-list"></div>
+        <div class="fb-empty" id="fb-empty" style="display:none">Empty folder.</div>
       </div>
     </div>
 
@@ -286,6 +336,38 @@ img#snap{max-width:100%;border-radius:4px;border:1px solid var(--border);display
 </div>
 <div id="toast"></div>
 
+<!-- File viewer: full-screen, sits above the layout regardless of tab/sidebar -->
+<div class="fb-overlay" id="fb-overlay">
+  <div class="fb-overlay-header">
+    <button class="fb-icon-btn" id="fb-viewer-close">✕</button>
+    <span class="fb-overlay-title" id="fb-viewer-title"></span>
+    <button class="btn primary" id="fb-viewer-save" style="display:none">Save</button>
+  </div>
+  <div class="fb-overlay-body" id="fb-viewer-body"></div>
+</div>
+
+<!-- Kebab action sheet: rename / delete -->
+<div class="fb-sheet-backdrop" id="fb-sheet-backdrop">
+  <div class="fb-sheet">
+    <div class="fb-sheet-title" id="fb-sheet-title"></div>
+    <button class="fb-sheet-item" id="fb-sheet-rename">Rename</button>
+    <button class="fb-sheet-item danger" id="fb-sheet-delete">Delete</button>
+    <button class="fb-sheet-item" id="fb-sheet-cancel">Cancel</button>
+  </div>
+</div>
+
+<!-- Rename prompt -->
+<div class="fb-sheet-backdrop" id="fb-rename-backdrop">
+  <div class="fb-sheet">
+    <div class="fb-sheet-title">Rename</div>
+    <div class="field"><input type="text" id="fb-rename-input"></div>
+    <div class="btn-row">
+      <button class="btn primary" id="fb-rename-save">Save</button>
+      <button class="btn" id="fb-rename-cancel">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <script>
 function $(id){ return document.getElementById(id); }
 
@@ -297,10 +379,17 @@ document.querySelectorAll('.nav-item').forEach(btn => {
     btn.classList.add('active');
     $('tab-' + btn.dataset.tab).classList.add('active');
     if (btn.dataset.tab === 'wifi') refreshWifi();
-    if (btn.dataset.tab === 'files') fsLoad('');
+    if (btn.dataset.tab === 'files') fbLoad('');
     if (btn.dataset.tab === 'tools') loadTools();
+    closeSidebar();
   });
 });
+
+// ── Mobile sidebar drawer ────────────────────────────────────────────────
+function openSidebar() { $('sidebar').classList.add('open'); $('sidebar-backdrop').classList.add('show'); }
+function closeSidebar() { $('sidebar').classList.remove('open'); $('sidebar-backdrop').classList.remove('show'); }
+$('mobile-menu-btn').onclick = openSidebar;
+$('sidebar-backdrop').onclick = closeSidebar;
 
 // ── Web page theme (cosmetic only, independent of device theme) ──────────
 document.querySelectorAll('.wt-btn').forEach(btn => {
@@ -492,64 +581,195 @@ async function addWifi() {
 }
 
 // ── Files ────────────────────────────────────────────────────────────────
-let fsCurrentPath = '';
-async function fsLoad(path) {
-  fsCurrentPath = path;
-  $('fs-path').textContent = '/' + path;
-  $('fs-up').style.display = path ? 'inline-block' : 'none';
-  const encodedPath = path.split('/').map(encodeURIComponent).join('/');
-  const d = await api('GET', '/api/fs?path=' + encodedPath);
-  const list = $('fs-list');
+// Mobile-first browser, modeled on GitHub's mobile file view: a breadcrumb
+// trail, a flat tappable list, and a full-screen viewer/editor that overlays
+// the whole page (so it isn't cramped by the sidebar on narrow screens).
+let fbPath = '';
+const FB_TEXT_EXTS = new Set(['txt','log','csv','md','yaml','yml','json','html','htm','css','js',
+  'c','h','cc','cpp','hpp','py','sh','ini','conf','cfg','xml']);
+const FB_IMAGE_EXTS = new Set(['jpg','jpeg','png','bmp','gif']);
+const FB_AUDIO_EXTS = new Set(['mp3','wav','opus','ogg','m4a']);
+const FB_VIDEO_EXTS = new Set(['mp4','mov','webm']);
+const FB_MAX_EDIT_SIZE = 200 * 1024; // don't load huge files into a <textarea> on a phone
+
+function fbExt(name) {
+  const dot = name.lastIndexOf('.');
+  return dot === -1 ? '' : name.slice(dot + 1).toLowerCase();
+}
+function fbKind(name) {
+  const ext = fbExt(name);
+  if (FB_IMAGE_EXTS.has(ext)) return 'image';
+  if (FB_AUDIO_EXTS.has(ext)) return 'audio';
+  if (FB_VIDEO_EXTS.has(ext)) return 'video';
+  if (FB_TEXT_EXTS.has(ext)) return 'text';
+  return 'other';
+}
+function fbIcon(entry) {
+  if (entry.dir) return '📁';
+  switch (fbKind(entry.name)) {
+    case 'image': return '🖼️';
+    case 'audio': return '🎵';
+    case 'video': return '🎬';
+    case 'text': return '📄';
+    default: return '📦';
+  }
+}
+function fbUrl(rel) {
+  return '/api/files/' + rel.split('/').map(encodeURIComponent).join('/');
+}
+
+async function fbLoad(path) {
+  fbPath = path;
+  const d = await api('GET', '/api/fs?path=' + path.split('/').map(encodeURIComponent).join('/'));
+  fbRenderCrumbs(path);
+  const list = $('fb-list');
   list.innerHTML = '';
+  $('fb-empty').style.display = 'none';
   if (!d || !d.mounted) {
-    $('fs-not-mounted').style.display = 'block';
+    $('fb-not-mounted').style.display = 'block';
     return;
   }
-  $('fs-not-mounted').style.display = 'none';
+  $('fb-not-mounted').style.display = 'none';
   if (!d.entries.length) {
-    list.innerHTML = '<div style="color:var(--muted);font-size:12px">Empty.</div>';
+    $('fb-empty').style.display = 'block';
     return;
   }
   d.entries
     .sort((a,b) => (b.dir - a.dir) || a.name.localeCompare(b.name))
     .forEach(e => {
-      const row = document.createElement('div');
-      row.className = 'file-row';
       const rel = (path ? path + '/' : '') + e.name;
-      row.innerHTML = `<span class="file-name ${e.dir?'dir':''}">${e.name}</span><span class="file-size">${e.dir?'':kb(e.size)}</span>`;
-      row.querySelector('.file-name').onclick = () => {
-        if (e.dir) fsLoad(rel);
-        else fsOpen(rel);
+      const row = document.createElement('div');
+      row.className = 'fb-row';
+      row.innerHTML = `<span class="fb-icon">${fbIcon(e)}</span>` +
+        `<span class="fb-name">${e.name}</span>` +
+        `<span class="fb-meta">${e.dir?'':kb(e.size)}</span>` +
+        `<button class="fb-kebab">⋮</button>`;
+      row.querySelector('.fb-name').onclick = row.querySelector('.fb-icon').onclick = () => {
+        if (e.dir) fbLoad(rel); else fbOpenViewer(rel, e);
       };
-      if (!e.dir) {
-        const del = document.createElement('button');
-        del.className = 'btn danger';
-        del.textContent = 'Delete';
-        del.style.marginLeft = '8px';
-        del.onclick = async (ev) => {
-          ev.stopPropagation();
-          if (!confirm('Delete ' + e.name + '?')) return;
-          await fetch('/api/files/' + rel.split('/').map(encodeURIComponent).join('/'), { method: 'DELETE' });
-          fsLoad(path);
-        };
-        row.appendChild(del);
-      }
+      row.querySelector('.fb-kebab').onclick = (ev) => {
+        ev.stopPropagation();
+        fbOpenSheet(rel, e);
+      };
       list.appendChild(row);
     });
 }
-function fsUp() {
-  const parts = fsCurrentPath.split('/'); parts.pop();
-  fsLoad(parts.join('/'));
+
+function fbRenderCrumbs(path) {
+  const crumbs = $('fb-crumbs');
+  crumbs.innerHTML = '';
+  const addCrumb = (label, target, isLast) => {
+    const span = document.createElement('span');
+    span.className = 'fb-crumb' + (isLast ? ' current' : '');
+    span.textContent = label;
+    if (!isLast) span.onclick = () => fbLoad(target);
+    crumbs.appendChild(span);
+    if (!isLast) {
+      const sep = document.createElement('span');
+      sep.className = 'fb-crumb-sep';
+      sep.textContent = '/';
+      crumbs.appendChild(sep);
+    }
+  };
+  const parts = path ? path.split('/') : [];
+  addCrumb('sdcard', '', parts.length === 0);
+  parts.forEach((part, i) => {
+    addCrumb(part, parts.slice(0, i + 1).join('/'), i === parts.length - 1);
+  });
 }
-function fsOpen(rel) {
-  const url = '/api/files/' + rel.split('/').map(encodeURIComponent).join('/');
-  if (/\.(jpe?g|png|bmp)$/i.test(rel)) {
-    $('fs-preview').src = url + '?t=' + Date.now();
-    $('fs-preview-card').style.display = 'block';
+
+// ── Viewer (full-screen: text editor / image / audio / video / download) ──
+let fbViewerRel = null;
+function fbCloseViewer() {
+  $('fb-overlay').classList.remove('show');
+  $('fb-viewer-body').innerHTML = '';
+  $('fb-viewer-save').style.display = 'none';
+  fbViewerRel = null;
+}
+$('fb-viewer-close').onclick = fbCloseViewer;
+
+async function fbOpenViewer(rel, entry) {
+  fbViewerRel = rel;
+  $('fb-viewer-title').textContent = entry.name;
+  const body = $('fb-viewer-body');
+  body.innerHTML = '';
+  $('fb-viewer-save').style.display = 'none';
+  const url = fbUrl(rel);
+  const kind = fbKind(entry.name);
+
+  if (kind === 'text') {
+    if (entry.size > FB_MAX_EDIT_SIZE) {
+      body.innerHTML = `<div class="fb-overlay-note">File too large to edit here (${kb(entry.size)}).</div>` +
+        `<a class="btn" href="${url}" target="_blank" rel="noopener">Download</a>`;
+    } else {
+      body.innerHTML = '<div class="fb-overlay-note">Loading…</div>';
+      const text = await fetch(url).then(r => r.ok ? r.text() : Promise.reject()).catch(() => null);
+      if (text === null) { body.innerHTML = '<div class="fb-overlay-note">Failed to load.</div>'; }
+      else {
+        body.innerHTML = '';
+        const ta = document.createElement('textarea');
+        ta.id = 'fb-edit-area';
+        ta.spellcheck = false;
+        ta.value = text;
+        body.appendChild(ta);
+        $('fb-viewer-save').style.display = 'inline-block';
+      }
+    }
+  } else if (kind === 'image') {
+    body.innerHTML = `<img src="${url}?t=${Date.now()}">`;
+  } else if (kind === 'audio') {
+    body.innerHTML = `<audio controls src="${url}"></audio>`;
+  } else if (kind === 'video') {
+    body.innerHTML = `<video controls src="${url}"></video>`;
   } else {
-    window.open(url, '_blank');
+    body.innerHTML = `<div class="fb-overlay-note">No preview available.</div>` +
+      `<a class="btn" href="${url}" target="_blank" rel="noopener">Download</a>`;
   }
+  $('fb-overlay').classList.add('show');
 }
+
+$('fb-viewer-save').onclick = async () => {
+  const ta = $('fb-edit-area');
+  if (!ta || !fbViewerRel) return;
+  const r = await fetch(fbUrl(fbViewerRel), { method: 'PUT', body: ta.value }).catch(() => null);
+  if (r && r.ok) { toast('Saved'); fbLoad(fbPath); }
+  else toast('Save failed', false);
+};
+
+// ── Kebab action sheet: rename / delete ─────────────────────────────────
+let fbSheetRel = null, fbSheetEntry = null;
+function fbOpenSheet(rel, entry) {
+  fbSheetRel = rel; fbSheetEntry = entry;
+  $('fb-sheet-title').textContent = entry.name;
+  $('fb-sheet-backdrop').classList.add('show');
+}
+function fbCloseSheet() { $('fb-sheet-backdrop').classList.remove('show'); }
+$('fb-sheet-cancel').onclick = fbCloseSheet;
+$('fb-sheet-backdrop').onclick = (ev) => { if (ev.target.id === 'fb-sheet-backdrop') fbCloseSheet(); };
+
+$('fb-sheet-delete').onclick = async () => {
+  fbCloseSheet();
+  if (!confirm('Delete ' + fbSheetEntry.name + '?')) return;
+  const r = await fetch(fbUrl(fbSheetRel), { method: 'DELETE' }).catch(() => null);
+  if (r && r.ok) fbLoad(fbPath); else toast('Delete failed', false);
+};
+
+$('fb-sheet-rename').onclick = () => {
+  fbCloseSheet();
+  $('fb-rename-input').value = fbSheetEntry.name;
+  $('fb-rename-backdrop').classList.add('show');
+  setTimeout(() => $('fb-rename-input').focus(), 0);
+};
+function fbCloseRename() { $('fb-rename-backdrop').classList.remove('show'); }
+$('fb-rename-cancel').onclick = fbCloseRename;
+$('fb-rename-backdrop').onclick = (ev) => { if (ev.target.id === 'fb-rename-backdrop') fbCloseRename(); };
+$('fb-rename-save').onclick = async () => {
+  const newName = $('fb-rename-input').value.trim();
+  if (!newName || newName === fbSheetEntry.name) { fbCloseRename(); return; }
+  const ok = await api('POST', '/api/fs/rename', { path: fbSheetRel, name: newName });
+  fbCloseRename();
+  if (ok && ok.ok) fbLoad(fbPath); else toast('Rename failed', false);
+};
 
 // ── Tools ────────────────────────────────────────────────────────────────
 async function loadTools() {

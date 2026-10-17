@@ -59,7 +59,7 @@ void WebServer::Start() {
     httpd_config_t cfg = HTTPD_DEFAULT_CONFIG();
     cfg.uri_match_fn = httpd_uri_match_wildcard;
     cfg.stack_size = 8192;
-    cfg.max_uri_handlers = 20;
+    cfg.max_uri_handlers = 24;
 
     if (httpd_start(&server_, &cfg) != ESP_OK) {
         ESP_LOGE(TAG, "Failed to start HTTP server");
@@ -88,7 +88,9 @@ void WebServer::Start() {
     reg("/api/theme", HTTP_GET, HandleApiTheme);
     reg("/api/theme", HTTP_POST, HandleApiTheme);
     reg("/api/fs", HTTP_GET, HandleApiFs);
+    reg("/api/fs/rename", HTTP_POST, HandleApiFsRename);
     reg("/api/files/*", HTTP_GET, HandleApiFileServe);
+    reg("/api/files/*", HTTP_PUT, HandleApiFileServe);
     reg("/api/files/*", HTTP_DELETE, HandleApiFileServe);
     reg("/api/tools", HTTP_GET, HandleApiTools);
     reg("/api/tool/*", HTTP_POST, HandleApiToolCall);
@@ -578,6 +580,24 @@ esp_err_t WebServer::HandleApiFileServe(httpd_req_t* req) {
         return ESP_OK;
     }
 
+    if (req->method == HTTP_PUT) {
+        std::string body = ReadBody(req);
+        FILE* wf = fopen(path.c_str(), "wb");
+        if (!wf) {
+            JsonErr(req, "Write failed");
+            return ESP_OK;
+        }
+        size_t written = fwrite(body.data(), 1, body.size(), wf);
+        fclose(wf);
+        if (written != body.size()) {
+            JsonErr(req, "Write incomplete");
+            return ESP_OK;
+        }
+        ESP_LOGI(TAG, "Wrote %s (%u bytes)", path.c_str(), (unsigned)written);
+        JsonOk(req);
+        return ESP_OK;
+    }
+
     FILE* f = fopen(path.c_str(), "rb");
     if (!f) {
         httpd_resp_send_err(req, HTTPD_404_NOT_FOUND, "Not found");
@@ -608,6 +628,56 @@ esp_err_t WebServer::HandleApiFileServe(httpd_req_t* req) {
     }
     fclose(f);
     httpd_resp_send_chunk(req, nullptr, 0);
+    return ESP_OK;
+}
+
+// POST /api/fs/rename  {"path": "<rel to item>", "name": "<new base name>"}
+// Renames in place — the new name may not contain '/', so this can't be used
+// to move a file into a different directory.
+esp_err_t WebServer::HandleApiFsRename(httpd_req_t* req) {
+    auto* self = static_cast<WebServer*>(req->user_ctx);
+    if (!self->sd_mounted_) {
+        JsonErr(req, "SD not mounted");
+        return ESP_OK;
+    }
+
+    std::string body = ReadBody(req);
+    cJSON* j = cJSON_Parse(body.c_str());
+    if (!j) {
+        JsonErr(req, "Invalid JSON");
+        return ESP_OK;
+    }
+    cJSON* path_j = cJSON_GetObjectItem(j, "path");
+    cJSON* name_j = cJSON_GetObjectItem(j, "name");
+    if (!cJSON_IsString(path_j) || !cJSON_IsString(name_j)) {
+        cJSON_Delete(j);
+        JsonErr(req, "Missing path or name");
+        return ESP_OK;
+    }
+    std::string rel(path_j->valuestring);
+    std::string new_name(name_j->valuestring);
+    cJSON_Delete(j);
+
+    if (!CleanRelPath(rel) || rel.empty()) {
+        JsonErr(req, "Bad path");
+        return ESP_OK;
+    }
+    if (new_name.empty() || new_name.find('/') != std::string::npos || new_name.find("..") != std::string::npos) {
+        JsonErr(req, "Bad name");
+        return ESP_OK;
+    }
+
+    auto slash = rel.rfind('/');
+    std::string dir = slash != std::string::npos ? rel.substr(0, slash + 1) : "";
+    std::string old_path = "/sdcard/" + rel;
+    std::string new_path = "/sdcard/" + dir + new_name;
+
+    if (rename(old_path.c_str(), new_path.c_str()) == 0) {
+        ESP_LOGI(TAG, "Renamed %s -> %s", old_path.c_str(), new_path.c_str());
+        JsonOk(req);
+    } else {
+        JsonErr(req, "Rename failed");
+    }
     return ESP_OK;
 }
 

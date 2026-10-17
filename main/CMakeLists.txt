@@ -35,6 +35,7 @@ set(SOURCES "audio/audio_codec.cc"
             "protocols/mqtt_protocol.cc"
             "protocols/websocket_protocol.cc"
             "mcp_server.cc"
+            "features/mcp_remote_client.cc"
             "system_info.cc"
             "application.cc"
             "ota.cc"
@@ -44,7 +45,7 @@ set(SOURCES "audio/audio_codec.cc"
             "main.cc"
             )
 
-set(INCLUDE_DIRS "." "display" "display/lvgl_display" "display/lvgl_display/jpg" "audio" "audio/demuxer" "protocols")
+set(INCLUDE_DIRS "." "display" "display/lvgl_display" "display/lvgl_display/jpg" "audio" "audio/demuxer" "protocols" "features" "features/k10_dashboard")
 
 # Add board common files
 list(APPEND SOURCES
@@ -1068,9 +1069,35 @@ if(CONFIG_BOARD_TYPE_DF_K10)
         esp_http_server
         mdns
     )
-    list(APPEND EXTRA_EMBED_FILES
-        ${CMAKE_CURRENT_SOURCE_DIR}/boards/dfrobot/df-k10/web_dashboard.html
+    list(APPEND SOURCES
+        "features/k10_dashboard/web_server.cc"
+        "features/k10_dashboard/emoji_style.cc"
+        "features/k10_dashboard/sensor_control.cc"
     )
+    list(APPEND EXTRA_EMBED_FILES
+        ${CMAKE_CURRENT_SOURCE_DIR}/features/k10_dashboard/web_dashboard.html
+    )
+
+    # Three emoji sets for self.set_emoji_style: Fluent (animated, the
+    # build-time default) is reconstructed on demand from the default
+    # assets partition — nothing to embed for it here. The other two are
+    # embedded directly:
+    set(EMOJI_NAMES angry confident confused cool crying delicious embarrassed funny happy
+                    kissy laughing loving neutral relaxed sad shocked silly sleepy
+                    surprised thinking winking)
+
+    # Noto static — the 78/xiaozhi-fonts dependency's own current assets,
+    # not vendored (unlike the animated GIFs below, which had to be
+    # vendored after a newer version of that package dropped the gif/
+    # directory).
+    set(NOTO_STATIC_DIR ${CMAKE_SOURCE_DIR}/managed_components/78__xiaozhi-fonts/png/noto-color-emoji_128)
+    foreach(EMOJI_NAME ${EMOJI_NAMES})
+        list(APPEND EXTRA_EMBED_FILES ${NOTO_STATIC_DIR}/${EMOJI_NAME}.png)
+    endforeach()
+
+    # Noto animated (4.5MB) doesn't fit via EMBED_FILES — that links into the
+    # ~4MB app partition, not the separate 8MB assets partition Fluent's set
+    # actually lives in. See emoji_style.cc for the "noto-animated" TODO.
 endif()
 
 idf_component_register(SRCS ${SOURCES}

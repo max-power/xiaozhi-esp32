@@ -53,6 +53,7 @@ private:
     static esp_err_t HandleApiTheme(httpd_req_t* req);
     static esp_err_t HandleApiFs(httpd_req_t* req);
     static esp_err_t HandleApiFileServe(httpd_req_t* req);
+    static esp_err_t HandleApiFsRename(httpd_req_t* req);
     static esp_err_t HandleApiTools(httpd_req_t* req);
     static esp_err_t HandleApiToolCall(httpd_req_t* req);
     static esp_err_t HandleWs(httpd_req_t* req);

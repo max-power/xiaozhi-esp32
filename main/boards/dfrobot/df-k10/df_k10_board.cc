@@ -6,6 +6,7 @@
 #include "sd_control.h"
 #include "sensor_control.h"
 #include "web_server.h"
+#include "emoji_style.h"
 #include "application.h"
 #include "button.h"
 #include "config.h"
@@ -336,6 +337,7 @@ private:
         new LedStripControl(led_strip_);
         InitializeSdTool(sd_mounted_);
         InitializeSensorTool(i2c_bus_);
+        InitializeEmojiStyleTool();
     }
 
 public:

@@ -4,6 +4,7 @@
  */
 
 #include "mcp_server.h"
+#include "mcp_remote_client.h"
 #include <esp_log.h>
 #include <esp_app_desc.h>
 #include <algorithm>
@@ -57,25 +58,67 @@ void McpServer::AddCommonTools() {
         });
 
     AddTool("self.mcp.discover",
-        "Search for other MCP servers that could grant new tools/capabilities.\n"
-        "Note: discovery is not implemented yet — this always returns an empty "
-        "list. Don't tell the user new capabilities were found from this call.",
-        PropertyList(),
+        "Search the public MCP server registry for servers matching a free-text "
+        "query (e.g. \"hotel booking\", \"weather\"). Returns a short list of "
+        "candidates with a name, description, and url for each. This only "
+        "searches — it doesn't contact any of the servers it finds. To see what "
+        "a specific one can actually do, call self.mcp.connect with its url.",
+        PropertyList({
+            Property("query", kPropertyTypeString)
+        }),
         [](const PropertyList& properties) -> ReturnValue {
-            return "{\"servers\":[]}";
+            auto query = properties["query"].value<std::string>();
+            return DiscoverMcpServers(query);
+        });
+
+    AddTool("self.mcp.connect",
+        "Connect to a specific external MCP server (found via self.mcp.discover, "
+        "or a url given directly) and list the tools it provides. This is "
+        "read-only: it does not call any of the remote tools, so using it "
+        "doesn't grant new capabilities by itself. 'auth_token' is optional, "
+        "for servers that require a Bearer token.",
+        PropertyList({
+            Property("url", kPropertyTypeString),
+            Property("auth_token", kPropertyTypeString, std::string(""))
+        }),
+        [](const PropertyList& properties) -> ReturnValue {
+            auto url = properties["url"].value<std::string>();
+            auto auth_token = properties["auth_token"].value<std::string>();
+            return ConnectToRemoteMcpServer(url, auth_token);
+        });
+
+    AddTool("self.mcp.call_tool",
+        "Call a specific tool on an external MCP server. 'tool_name' must be "
+        "one of the names self.mcp.connect returned for this url. 'arguments' "
+        "is a JSON object encoded as a string, matching that tool's input "
+        "schema, e.g. '{\"symbol\":\"AAPL\"}' — use '{}' for a tool with no "
+        "arguments. 'auth_token' is optional, for servers that require a "
+        "Bearer token.",
+        PropertyList({
+            Property("url", kPropertyTypeString),
+            Property("tool_name", kPropertyTypeString),
+            Property("arguments", kPropertyTypeString, std::string("{}")),
+            Property("auth_token", kPropertyTypeString, std::string(""))
+        }),
+        [](const PropertyList& properties) -> ReturnValue {
+            auto url = properties["url"].value<std::string>();
+            auto tool_name = properties["tool_name"].value<std::string>();
+            auto arguments = properties["arguments"].value<std::string>();
+            auto auth_token = properties["auth_token"].value<std::string>();
+            return CallRemoteMcpTool(url, tool_name, arguments, auth_token);
         });
 
     AddTool("self.audio_speaker.set_volume",
         "Set the volume of the audio speaker. If the current volume is unknown, you must call `self.get_device_status` tool first and then call this tool.",
         PropertyList({
             Property("volume", kPropertyTypeInteger, 0, 100)
-        }), 
+        }),
         [&board](const PropertyList& properties) -> ReturnValue {
             auto codec = board.GetAudioCodec();
             codec->SetOutputVolume(properties["volume"].value<int>());
             return true;
         });
-    
+
     auto backlight = board.GetBacklight();
     if (backlight) {
         AddTool("self.screen.set_brightness",
@@ -240,7 +283,7 @@ void McpServer::AddUserOnlyTools() {
         [this](const PropertyList& properties) -> ReturnValue {
             auto url = properties["url"].value<std::string>();
             ESP_LOGI(TAG, "User requested firmware upgrade from URL: %s", url.c_str());
-            
+
             auto& app = Application::GetInstance();
             app.Schedule([url, &app]() {
                 bool success = app.UpgradeFirmware(url);
@@ -248,7 +291,7 @@ void McpServer::AddUserOnlyTools() {
                     ESP_LOGE(TAG, "Firmware upgrade failed");
                 }
             });
-            
+
             return true;
         });
 
@@ -286,10 +329,10 @@ void McpServer::AddUserOnlyTools() {
                 }
 
                 ESP_LOGI(TAG, "Upload snapshot %u bytes to %s", jpeg_data.size(), url.c_str());
-                
+
                 // 构造multipart/form-data请求体
                 std::string boundary = "----ESP32_SCREEN_SNAPSHOT_BOUNDARY";
-                
+
                 auto http = Board::GetInstance().GetNetwork()->CreateHttp(3);
                 http->SetHeader("Content-Type", "multipart/form-data; boundary=" + boundary);
                 if (!http->Open("POST", url)) {
@@ -324,7 +367,7 @@ void McpServer::AddUserOnlyTools() {
                 ESP_LOGI(TAG, "Snapshot screen result: %s", result.c_str());
                 return true;
             });
-        
+
         AddUserOnlyTool("self.screen.preview_image", "Preview an image on the screen",
             PropertyList({
                 Property("url", kPropertyTypeString)
@@ -448,19 +491,19 @@ void McpServer::ParseMessage(const cJSON* json) {
         ESP_LOGE(TAG, "Invalid JSONRPC version: %s", version ? version->valuestring : "null");
         return;
     }
-    
+
     // Check method
     auto method = cJSON_GetObjectItem(json, "method");
     if (method == nullptr || !cJSON_IsString(method)) {
         ESP_LOGE(TAG, "Missing method");
         return;
     }
-    
+
     auto method_str = std::string(method->valuestring);
     if (method_str.find("notifications") == 0) {
         return;
     }
-    
+
     // Check params
     auto params = cJSON_GetObjectItem(json, "params");
     if (params != nullptr && !cJSON_IsObject(params)) {
@@ -474,7 +517,7 @@ void McpServer::ParseMessage(const cJSON* json) {
         return;
     }
     auto id_int = id->valueint;
-    
+
     if (method_str == "initialize") {
         if (cJSON_IsObject(params)) {
             auto capabilities = cJSON_GetObjectItem(params, "capabilities");
@@ -546,11 +589,11 @@ void McpServer::ReplyError(int id, const std::string& message) {
 void McpServer::GetToolsList(int id, const std::string& cursor, bool list_user_only_tools) {
     const int max_payload_size = 8000;
     std::string json = "{\"tools\":[";
-    
+
     bool found_cursor = cursor.empty();
     auto it = tools_.begin();
     std::string next_cursor = "";
-    
+
     while (it != tools_.end()) {
         // 如果我们还没有找到起始位置，继续搜索
         if (!found_cursor) {
@@ -566,7 +609,7 @@ void McpServer::GetToolsList(int id, const std::string& cursor, bool list_user_o
             ++it;
             continue;
         }
-        
+
         // 添加tool前检查大小
         std::string tool_json = (*it)->to_json() + ",";
         if (json.length() + tool_json.length() + 30 > max_payload_size) {
@@ -574,15 +617,15 @@ void McpServer::GetToolsList(int id, const std::string& cursor, bool list_user_o
             next_cursor = (*it)->name();
             break;
         }
-        
+
         json += tool_json;
         ++it;
     }
-    
+
     if (json.back() == ',') {
         json.pop_back();
     }
-    
+
     if (json.back() == '[' && !tools_.empty()) {
         // 如果没有添加任何tool，返回错误
         ESP_LOGE(TAG, "tools/list: Failed to add tool %s because of payload size limit", next_cursor.c_str());
@@ -595,7 +638,7 @@ void McpServer::GetToolsList(int id, const std::string& cursor, bool list_user_o
     } else {
         json += "],\"nextCursor\":\"" + next_cursor + "\"}";
     }
-    
+
     ReplyResult(id, json);
 }
 
